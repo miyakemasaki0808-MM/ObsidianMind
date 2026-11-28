@@ -127,7 +127,7 @@ class ReadingTraceBackupTextTest {
             ReadingTraceBackupState.Imported(added = 4, merged = 1, withheld = emptyList(), interrupted = true)
         )
 
-        assertTrue(text.contains("中止"))
+        assertTrue(text.contains("止めました"))
         assertTrue(text.contains("4件"))
     }
 

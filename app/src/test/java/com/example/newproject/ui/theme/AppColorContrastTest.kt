@@ -5,6 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -68,6 +70,7 @@ class AppColorContrastTest {
         "relatedHeading" -> relatedHeading
         "aiHeading" -> aiHeading
         "linkText" -> linkText
+        "readingAccent" -> readingAccent
         "errorText" -> errorText
         "dangerAction" -> dangerAction
         else -> error("未知の文字トークン: $name")
@@ -210,9 +213,9 @@ class AppColorContrastTest {
         )
         return when (token) {
             // 本文Markdown（NoteComponents と FullscreenNoteScreen は**紙の地色**＝全段階）＋各パネルの本文
-            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet) + paper
+            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet, "readingChip" to readingChip) + paper // インラインのコードの字
             // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
-            "onSurfaceMuted" -> listOf(panelS, tinted, blue) + paper
+            "onSurfaceMuted" -> listOf(panelS, tinted, blue, "readingChip" to readingChip) + paper // 題の欄のタグの札も
             // Markdown の引用＋DistillCandidateRow
             "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet) + paper
             // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／「この部分」のシート
@@ -220,7 +223,8 @@ class AppColorContrastTest {
             "onSurfaceMetaBlue" -> listOf(blue)          // RelatedTab の更新日時のみ
             "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ
             "aiHeading" -> listOf(blue)                  // RelatedTab の見出しのみ
-            "linkText" -> listOf(panelS, tinted) + paper // Markdown のリンク
+            "linkText" -> listOf(panelS, tinted) + paper // Markdown のリンク（本文の外）
+            "readingAccent" -> listOf(panelS, tinted, "readingBadge" to readingBadge) + paper // 本文のリンク・見出しの線・箇条の点・番号の札の字
             "errorText" -> listOf(panelS, blue, sheet)
             "dangerAction" -> listOf(panelS, blue)
             else -> error("面の対応表に $token がない。使用箇所を確認して追加すること")
@@ -284,12 +288,16 @@ class AppColorContrastTest {
         }
     }
 
-    /** ダークでは段階を作らない（判断5）。全段階が `panel` と同値であることを固定する。 */
+    /**
+     * ダークでは段階を作らない（判断5）。全段階が同じ紙の色であることを固定する。
+     * ダークの紙は読む画面の夜の紺で、ほかの画面のパネル（`panel`）とは別の色（→ features/note_typesetting.md §5.6）。
+     */
     @Test
     fun `ダークでは紙の地色に段差を作らない`() {
         with(DarkAppColors) {
-            listOf(notePaper.fresh, notePaper.settling, notePaper.aged, notePaper.weathered)
-                .forEach { assertEquals(panel, it) }
+            listOf(notePaper.settling, notePaper.aged, notePaper.weathered)
+                .forEach { assertEquals(notePaper.fresh, it) }
+            assertNotEquals("読む画面の紙はほかの画面のパネルと別", panel, notePaper.fresh)
         }
     }
 
@@ -301,7 +309,7 @@ class AppColorContrastTest {
     fun `文字トークンは実際に載る面すべてでAA基準を満たす`() {
         val tokens = listOf(
             "onSurface", "onSurfaceMuted", "onSurfaceSubtle", "onSurfaceFaint",
-            "onSurfaceMetaBlue", "relatedHeading", "aiHeading", "linkText",
+            "onSurfaceMetaBlue", "relatedHeading", "aiHeading", "linkText", "readingAccent",
             "errorText", "dangerAction"
         )
         schemes.forEach { (schemeName, c) ->
@@ -441,6 +449,106 @@ class AppColorContrastTest {
                 assertAtLeast(4.5, contrast(c.onVibrant, stop), "ダーク onVibrant（$gradient $stop 上）")
                 assertAtLeast(4.5, contrast(c.onVibrantMuted, stop), "ダーク onVibrantMuted（$gradient $stop 上）")
             }
+        }
+    }
+
+    /**
+     * OKLch の色相（度）。淡い値は鮮やかな値と同じ色相で作る規則なので、規則と同じ色空間で測る
+     * （HSV の色相では、OKLch で8度ずれた値も1度差に見えて見逃す）。
+     */
+    private fun oklchHue(color: Color): Double {
+        fun lin(c: Float): Double = if (c <= 0.04045f) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
+        val r = lin(color.red); val g = lin(color.green); val b = lin(color.blue)
+        val l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        val m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        val s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        val a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+        val bb = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+        return Math.toDegrees(atan2(bb, a)).mod(360.0)
+    }
+
+    /**
+     * 読む画面の場は既定で淡い（→ features/note_typesetting.md 判断17）。淡い値は鮮やかな値の**色相を保ったまま明るくした**もので、
+     * 色相がずれると、背景の3色が別の色の組に見える。
+     */
+    @Test
+    fun `淡い場は鮮やかな場の色相を保ち、明るい`() {
+        DefaultReadingGround.forEach { color ->
+            assertTrue("淡い値 ${color.pale} が鮮やかな値 ${color.vivid} より明るい", relativeLuminance(color.pale) > relativeLuminance(color.vivid))
+            val diff = abs(oklchHue(color.pale) - oklchHue(color.vivid)).let { minOf(it, 360 - it) }
+            assertTrue("淡い値 ${color.pale} の色相が ${"%.1f".format(diff)} 度ずれている", diff < 3.0)
+        }
+        assertEquals(DefaultReadingGround.map { it.vivid }, LightAppColors.readingGradientStops)
+        assertEquals(DefaultReadingGround.map { it.pale }, LightAppColors.readingGroundPaleStops)
+        assertEquals(DefaultReadingGround.map { it.vivid }, LightAppColors.readingGroundVividStops)
+        assertEquals("ダークは強さの設定が効かない", DarkAppColors.readingGroundVividStops, DarkAppColors.readingGroundPaleStops)
+    }
+
+    /** コードの枠は、テーマに関わらず暗い窓（→ features/note_typesetting.md 判断14）。字と言語の札は窓の上で読める。 */
+    @Test
+    fun `コードの窓の字と札は窓の上で読める`() {
+        schemes.forEach { (name, c) ->
+            assertAtLeast(4.5, contrast(c.onCodeWindow, c.codeWindow), "$name コードの字")
+            assertAtLeast(4.5, contrast(c.codeWindowLabel, c.codeWindow), "$name 言語の札")
+            assertTrue("$name の窓は暗い", relativeLuminance(c.codeWindow) < 0.02)
+        }
+        assertTrue("ダークの窓は紙より暗い", relativeLuminance(DarkAppColors.codeWindow) < relativeLuminance(DarkAppColors.panel))
+        // 色分けの4色は明暗で値を替えないので、2つの窓の両方で測る。
+        listOf("キーワード" to CodeKeyword, "文字列" to CodeString, "コメント" to CodeComment, "数字" to CodeNumber).forEach { (name, color) ->
+            schemes.forEach { (scheme, c) -> assertAtLeast(4.5, contrast(color, c.codeWindow), "$scheme コードの$name") }
+        }
+    }
+
+    /**
+     * コールアウトの面（→ features/note_typesetting.md §5.4）。頭の線画と言葉・題・中身の字が、どの面の上でも読める。
+     * 中身は引用と同じ字の色（onSurfaceSubtle）で描く。
+     */
+    @Test
+    fun `コールアウトの面の上の言葉と題と中身が読める`() {
+        schemes.forEach { (name, c) ->
+            c.calloutFaces.all.forEachIndexed { i, tone ->
+                assertAtLeast(4.5, contrast(tone.title, tone.surface), "$name 面$i の言葉")
+                assertAtLeast(4.5, contrast(c.onSurface, tone.surface), "$name 面$i の題")
+                assertAtLeast(4.5, contrast(c.onSurfaceSubtle, tone.surface), "$name 面$i の中身")
+            }
+        }
+    }
+
+    /**
+     * ダークの読む画面は夜の紺（→ features/note_typesetting.md §5.6）。場 < 紙 < 紙の上と場に置く部品、の順に明るくする。
+     * コードの窓だけはこの順の外で、紙より暗い（判断14 → `コードの窓の字と札は窓の上で読める`）。
+     */
+    @Test
+    fun `ダークの読む画面は場より紙が、紙より部品が明るい`() {
+        val c = DarkAppColors
+        val paper = relativeLuminance(c.notePaper.fresh)
+        c.readingGroundPaleStops.forEach { assertTrue("場 $it は紙より暗い", relativeLuminance(it) < paper) }
+        val parts = listOf("再会カード" to c.readingCard, "タグの札" to c.readingChip, "番号の札" to c.readingBadge) +
+            c.calloutFaces.all.mapIndexed { i, tone -> "コールアウトの面$i" to tone.surface }
+        parts.forEach { (name, color) -> assertTrue("$name は紙より明るい", relativeLuminance(color) > paper) }
+        assertTrue("起動の画面と冊子の地は変えない", c.readingGradientStops != c.readingGroundPaleStops)
+    }
+
+    @Test
+    fun `ダークの読む画面の場と再会カードの上の文字が読める`() {
+        val c = DarkAppColors
+        c.readingGroundPaleStops.forEach { stop ->
+            assertAtLeast(4.5, contrast(c.onGradientHeaderTitle, stop), "見出しタイトル（夜の紺 $stop）")
+            assertAtLeast(4.5, contrast(c.onGradientHeaderSubtitle, stop), "見出し副題（夜の紺 $stop）")
+            listOf(c.buttonPrimary, c.buttonSecondary).forEach { assertAtLeast(3.0, contrast(it, stop), "ボタンの塗り（夜の紺 $stop）") }
+        }
+        listOf("onSurface" to c.onSurface, "onSurfaceFaint" to c.onSurfaceFaint, "accentText" to c.accentText, "linkText" to c.linkText)
+            .forEach { (name, color) -> assertAtLeast(4.5, contrast(color, c.readingCard), "再会カードの $name") }
+    }
+
+    @Test
+    fun `淡い場の上でも見出しの文字とボタンの輪郭が読める`() {
+        val c = LightAppColors
+        c.readingGroundPaleStops.forEach { stop ->
+            val effective = blend(c.gradientHeaderScrim, stop, c.gradientHeaderScrim.alpha)
+            assertAtLeast(4.5, contrast(c.onGradientHeaderTitle, effective), "見出しタイトル（淡い場 $stop ＋面）")
+            assertAtLeast(4.5, contrast(c.onGradientHeaderSubtitle, effective), "見出し副題（淡い場 $stop ＋面）")
+            assertAtLeast(3.0, contrast(c.buttonOutlineOnGradient, stop), "ボタンの輪郭線（淡い場 $stop）")
         }
     }
 
@@ -590,6 +698,7 @@ class AppColorContrastTest {
             "onSurface" to (LightAppColors.onSurface to DarkAppColors.onSurface),
             "onVibrant" to (LightAppColors.onVibrant to DarkAppColors.onVibrant),
             "linkText" to (LightAppColors.linkText to DarkAppColors.linkText),
+            "readingAccent" to (LightAppColors.readingAccent to DarkAppColors.readingAccent),
             "errorText" to (LightAppColors.errorText to DarkAppColors.errorText),
             "buttonPrimary" to (LightAppColors.buttonPrimary to DarkAppColors.buttonPrimary),
             "buttonSecondary" to (LightAppColors.buttonSecondary to DarkAppColors.buttonSecondary),

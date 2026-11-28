@@ -36,6 +36,20 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.example.newproject.ui.theme.ReadingPlateRim
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import com.example.newproject.ui.theme.ReadingAccent
+import com.example.newproject.model.NotePaperTone
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.draw.drawBehind
+import com.example.newproject.ui.theme.ReadingPlateLight
+import com.example.newproject.ui.markdown.MarkdownBodyStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,6 +108,8 @@ internal fun ReadingProgressReporter(
     val imageBlocks = remember(sectionModel) { imageBlockRefs(sectionModel?.blocks.orEmpty()) }
     LaunchedEffect(sectionModel, imageBlocks) {
         val model = sectionModel ?: return@LaunchedEffect
+        // 本文の無いノートは報告しない。共有の一覧に前のノートの配置が残っていても、架空のブロックを報告しない。
+        if (model.blocks.isEmpty()) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             val last = layout.visibleItemsInfo.lastOrNull() ?: return@snapshotFlow null
@@ -192,6 +208,27 @@ internal fun IconPill(
 /** [IconPill] の直径。見出しの題名の行はこの高さを最初から持つ（→ [GradientHeader]）。 */
 internal val ICON_PILL_SIZE = 40.dp
 
+/** プレートの中の余白（→ features/note_typesetting.md §5.1）。 */
+private val PLATE_PADDING_TOP = 26.dp
+private val PLATE_PADDING_HORIZONTAL = 22.dp
+private val PLATE_PADDING_BOTTOM = 30.dp
+
+/** 上端の光が消えるまでの深さ。 */
+private val PLATE_LIGHT_DEPTH = 240.dp
+
+/** プレートを場から浮かせる影。ダークでは影が見えないので、縁（`ReadingPlateRim`）で浮かせる。 */
+private val PLATE_ELEVATION = 4.dp
+
+/** 本文の紙の見た目の要素。[readingPlateLook] が浮かせるかどうかから決める。 */
+internal data class ReadingPlateLook(val rounded: Boolean, val shadow: Boolean, val rim: Boolean, val topLight: Boolean)
+
+/**
+ * 本文の紙の見た目（→ features/note_typesetting.md §5.1）。浮かせる紙（通常表示）は角・影・縁・上端の光を持つ。
+ * **浮かせない紙（全画面）は画面そのものなので、どれも持たない** — 角や光を残すと、安全領域の下から別の面が始まって見える。
+ */
+internal fun readingPlateLook(floating: Boolean): ReadingPlateLook =
+    ReadingPlateLook(rounded = floating, shadow = floating, rim = floating, topLight = floating)
+
 /** ノート本文パネル（通常表示・全画面で共用）。 */
 @Composable
 internal fun NoteContentPanel(
@@ -211,62 +248,157 @@ internal fun NoteContentPanel(
     /** 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ [QuoteOffers]）。 */
     quoteOffers: QuoteOffers? = null,
     /** 見出しを上端に置くための末尾の余白。[listState] の持ち主が同じ寿命で持つ（→ [EndSpace]）。 */
-    endSpace: EndSpace? = null
+    endSpace: EndSpace? = null,
+    /**
+     * 場の上に浮かせるか（→ features/note_typesetting.md §5.1）。通常表示は浮かせ、全画面は画面全体が紙なので浮かせない
+     * （影と縁を付けると、紙と同じ色の地の上に紙の輪郭だけが見える）。
+     */
+    floating: Boolean = true,
+    /** 本文の末尾に並べるタグの札。本文の解析結果から渡す（→ [NoteTagRow]）。 */
+    tags: List<String> = emptyList()
 ) {
+    val look = readingPlateLook(floating)
     Surface(
         modifier = modifier.fillMaxWidth(),
         // 紙の地色は放置期間で決まる。演出が無効なら現行の `Panel` と同値が返る。
         color = notePaperColor(uiState.notePaperTone),
         // **形は「読む面」の役割から引く。** 値を直に書くと、冊子との区別が
         // 「揃えたほうが綺麗」の一言で消える（→ system/bearing_channels.md §6）。
-        shape = ReadingSurfaceShape
+        shape = if (look.rounded) ReadingSurfaceShape else RectangleShape,
+        shadowElevation = if (look.shadow) PLATE_ELEVATION else 0.dp,
+        border = if (look.rim) BorderStroke(1.dp, ReadingPlateRim) else null
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            val (noteTitle, noteContent) = when (val state = uiState.noteState) {
-                is NoteState.Success -> state.title to state.content
-                is NoteState.Empty   -> "ノート未表示" to "このVaultにMarkdownノートが見つかりませんでした。"
-                is NoteState.Error   -> "ノート未表示" to "Vaultを読み込めませんでした。"
-                else                 -> "ノート未表示" to "Vaultフォルダを選択して「ランダム表示」をタップしてください。"
-            }
-            // precomputedBlocks はノート本文（Success時）のパース結果。
-            // プレースホルダ表示時は内容と一致しないため渡さない。
-            val isNote = uiState.noteState is NoteState.Success
-            val blocksForContent = if (isNote) precomputedBlocks else null
-            Text(text = noteTitle, color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
-            // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**
-            // （Main外へ逃がした意味がなくなる）。プレースホルダ文言は数十文字なので
-            // フォールバックのまま描いてよい。
-            if (!isNote || blocksForContent != null) {
-                if (listState != null) {
-                    MarkdownNoteContent(
-                        content = noteContent,
-                        modifier = Modifier.padding(top = 12.dp).weight(1f),
-                        listState = listState,
-                        precomputedBlocks = blocksForContent,
-                        imageLoader = imageLoader,
-                        imageMeasurements = imageMeasurements,
-                        headingAccessory = if (isNote) headingAccessory else null,
-                        onLink = if (isNote) onLink else null,
-                        // 今のノートの本文はいつも置ける本文として組み、案内の文字を出す間は受け手を渡さない。
-                        quotable = true,
-                        onQuote = if (isNote) onQuote else null,
-                        quoteOffers = if (isNote) quoteOffers else null,
-                        endSpace = if (isNote) endSpace else null
-                    )
-                } else {
-                    MarkdownNoteContent(
-                        content = noteContent,
-                        modifier = Modifier.padding(top = 12.dp).weight(1f),
-                        precomputedBlocks = blocksForContent,
-                        imageLoader = imageLoader,
-                        imageMeasurements = imageMeasurements,
-                        onLink = if (isNote) onLink else null
-                    )
+        // 紙の上端からごく淡い光を重ねる（ダークだけ。ライトは透明で何も描かない）。光はどのノートでも同じで何も表さない。
+        val plateLight = ReadingPlateLight
+        BoxWithConstraints(
+            modifier = if (look.topLight) {
+                Modifier.drawBehind {
+                    drawRect(Brush.verticalGradient(listOf(plateLight, Color.Transparent), endY = PLATE_LIGHT_DEPTH.toPx()))
                 }
             } else {
-                Spacer(modifier = Modifier.weight(1f))
+                Modifier
             }
+        ) {
+            // 本文の列を最大幅で中央に置く。題も同じ余白で本文の頭にそろえる。
+            val inset = MarkdownBodyStyle.columnInset(maxWidth - PLATE_PADDING_HORIZONTAL * 2)
+            Column(
+                modifier = Modifier.padding(
+                    start = PLATE_PADDING_HORIZONTAL,
+                    end = PLATE_PADDING_HORIZONTAL,
+                    top = PLATE_PADDING_TOP,
+                    bottom = PLATE_PADDING_BOTTOM
+                )
+            ) {
+                val state = uiState.noteState
+                if (state !is NoteState.Success) {
+                    // 案内の文は最初の1枚を引く前の場と同じ1か所から読む。読み込み中は文を出さず、紙だけを出す。
+                    emptyPlaceText(state, uiState.vaultSelected)?.let { EmptyPlaceSentence(it, Modifier.padding(horizontal = inset)) }
+                    Spacer(modifier = Modifier.weight(1f))
+                } else {
+                    // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
+                    // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**（Main外へ逃がした意味がなくなる）。
+                    if (precomputedBlocks != null) {
+                        if (listState != null) {
+                            MarkdownNoteContent(
+                                content = state.content,
+                                modifier = Modifier.weight(1f),
+                                listState = listState,
+                                precomputedBlocks = precomputedBlocks,
+                                imageLoader = imageLoader,
+                                imageMeasurements = imageMeasurements,
+                                headingAccessory = headingAccessory,
+                                onLink = onLink,
+                                // 今のノートの本文はいつも置ける本文として組む。
+                                quotable = true,
+                                onQuote = onQuote,
+                                quoteOffers = quoteOffers,
+                                endSpace = endSpace,
+                                columnInset = inset,
+                                tags = tags
+                            )
+                        } else {
+                            MarkdownNoteContent(
+                                content = state.content,
+                                modifier = Modifier.weight(1f),
+                                precomputedBlocks = precomputedBlocks,
+                                imageLoader = imageLoader,
+                                imageMeasurements = imageMeasurements,
+                                onLink = onLink,
+                                columnInset = inset,
+                                tags = tags
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 「Vaultを選択」のボタンの文字。案内の文（[emptyPlaceText]）もこの名前で指す。 */
+internal const val SELECT_VAULT_LABEL = "Vaultを選択"
+
+/** 「別のノートをひらく」のボタンの文字。案内の文（[emptyPlaceText]）もこの名前で指す。 */
+internal const val DRAW_NOTE_LABEL = "別のノートをひらく"
+
+/**
+ * ノートが出ていないときの案内の文（→ features/note_typesetting.md §5.7）。**最初の1枚を引く前の場と本文の紙が、ここ1か所から読む。**
+ * 指すボタンの名前はボタンの文字と同じ定数から作るので、ボタンの名前を変えても文だけ古くならない。読み込み中とノートを出している間は null。
+ * 失敗の2つは失敗が分かる言葉で伝える（色だけで伝えない）。
+ */
+internal fun emptyPlaceText(noteState: NoteState, vaultSelected: Boolean): String? = when (noteState) {
+    is NoteState.Success, NoteState.Loading -> null
+    NoteState.Empty -> "このVaultにMarkdownノートが見つかりませんでした"
+    is NoteState.Error -> "Vaultを読み込めませんでした"
+    NoteState.Idle -> if (vaultSelected) {
+        "「$DRAW_NOTE_LABEL」で、今日の1枚を引きます"
+    } else {
+        "「$SELECT_VAULT_LABEL」から、読むノートのフォルダを選びます"
+    }
+}
+
+/** 案内の1文。題は出さず、藍の短い線と文だけで静かに待つ。 */
+@Composable
+internal fun EmptyPlaceSentence(text: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .size(MarkdownBodyStyle.HeadingMarkWidth, MarkdownBodyStyle.HeadingMarkHeight)
+                .background(ReadingAccent, RoundedCornerShape(1.dp))
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(text = text, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Paragraph))
+    }
+}
+
+/**
+ * 最初の1枚を引く前の場。本文の紙（[NoteContentPanel]）と同じ形・色・浮き・余白のプレートで、[text] があれば上に置く。
+ * 呼び手は本文の紙と同じ位置・大きさ（伸ばした高さ）で置く。
+ */
+@Composable
+internal fun EmptyPlacePanel(text: String?, modifier: Modifier = Modifier) {
+    val plateLight = ReadingPlateLight
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = notePaperColor(NotePaperTone.Fresh),
+        shape = ReadingSurfaceShape,
+        shadowElevation = PLATE_ELEVATION,
+        border = BorderStroke(1.dp, ReadingPlateRim)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind { drawRect(Brush.verticalGradient(listOf(plateLight, Color.Transparent), endY = PLATE_LIGHT_DEPTH.toPx())) }
+                .padding(
+                    start = PLATE_PADDING_HORIZONTAL,
+                    end = PLATE_PADDING_HORIZONTAL,
+                    top = PLATE_PADDING_TOP,
+                    bottom = PLATE_PADDING_BOTTOM
+                )
+        ) {
+            if (text != null) EmptyPlaceSentence(text)
         }
     }
 }

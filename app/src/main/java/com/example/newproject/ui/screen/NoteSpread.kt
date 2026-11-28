@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
@@ -58,11 +59,8 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,6 +73,9 @@ import com.example.newproject.ui.markdown.HeadingAccessoryWidth
 import com.example.newproject.ui.markdown.InlineMarkdownColors
 import com.example.newproject.ui.markdown.LocalNoteLinkTaps
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
+import com.example.newproject.ui.markdown.noteFolderLabel
+import com.example.newproject.ui.markdown.NoteTagRow
+import com.example.newproject.ui.markdown.noteTagRowHeightPx
 import com.example.newproject.ui.markdown.MeasuredSpreadBlock
 import com.example.newproject.ui.markdown.NoteImageBlockRef
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -85,6 +86,7 @@ import com.example.newproject.ui.markdown.SpreadMeasureInputs
 import com.example.newproject.ui.markdown.SpreadSliceView
 import com.example.newproject.ui.markdown.firstUnmeasuredImageIndex
 import com.example.newproject.ui.markdown.imageBlockRefs
+import com.example.newproject.ui.markdown.isLeadParagraph
 import com.example.newproject.ui.markdown.measureSpreadBlock
 import com.example.newproject.ui.markdown.reservedImageHeightDp
 import com.example.newproject.ui.markdown.watchLinkPresses
@@ -92,7 +94,8 @@ import com.example.newproject.ui.quantizeReadingFraction
 import com.example.newproject.ui.shouldReportReadingProgress
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.CodePanel
-import com.example.newproject.ui.theme.LinkText
+import com.example.newproject.ui.theme.ReadingAccent
+import com.example.newproject.ui.theme.ReadingChip
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
@@ -117,7 +120,7 @@ import kotlin.coroutines.coroutineContext
 @Composable
 internal fun NoteSpread(
     noteKey: String,
-    title: String,
+    /** 本文。タグの札は [sectionModel] から読み、最後のページの末尾に置く（→ placeSpreadTrailer）。 */
     sectionModel: NoteSectionModel,
     position: BodyPosition,
     paperColor: Color,
@@ -135,110 +138,116 @@ internal fun NoteSpread(
     /** 各ブロックを測る前に待つ口。組版の途中に操作を挟む端末テストだけが渡す（→ features/note_spread.md §10）。 */
     measureGate: suspend (blockIndex: Int) -> Unit = {}
 ) {
-    val density = LocalDensity.current
-    val currentMeasureGate by rememberUpdatedState(measureGate)
-    val blocks = sectionModel.blocks
-    val measurer = rememberTextMeasurer(cacheSize = 0)
-    val baseStyle = LocalTextStyle.current
-    val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = CodePanel, link = LinkText)
-    val currentOnLink by rememberUpdatedState(onLink)
-    val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
-    val textWidthPx = with(density) { (pageWidth - PagePadding * 2).roundToPx() }
-    val accessoryPx = if (headingAccessory != null) with(density) { HeadingAccessoryWidth.roundToPx() } else 0
-    val pendingImageHeightDp = LocalConfiguration.current.screenHeightDp
-    // 画像の寸法が届くたびに組み直す（読む位置は保つ → 判断11）。寸法は共有の入れ物の観測できる状態から読む。
-    val imageSizes = blocks.filterIsInstance<MarkdownBlock.Image>().map { imageMeasurements?.measurementOf(it) }
-
-    // 本文の画像は、組む前に寸法を測る（描く前に高さが要る）。測り終えれば入れ物が替わり、上の鍵で組み直す。
-    LaunchedEffect(blocks, imageLoader, imageMeasurements) {
-        if (imageLoader == null || imageMeasurements == null) return@LaunchedEffect
-        blocks.filterIsInstance<MarkdownBlock.Image>().filter { imageMeasurements.measurementOf(it) == null }.forEach { block ->
-            imageMeasurements.record(block, imageLoader.measure(block))
-        }
-    }
-
-    var measured by remember(noteKey, blocks, textWidthPx, density, baseStyle, colors, linkTaps, accessoryPx, imageSizes) {
-        mutableStateOf(SpreadMeasured(emptyList(), complete = blocks.isEmpty()))
-    }
-    LaunchedEffect(noteKey, blocks, textWidthPx, density, baseStyle, colors, linkTaps, accessoryPx, imageSizes) {
-        val widthDp = with(density) { textWidthPx.toDp().value.toInt() }
-        val inputs = SpreadMeasureInputs(
-            measurer = measurer,
-            baseStyle = baseStyle,
-            density = density,
-            textWidthPx = textWidthPx,
-            headingAccessoryPx = accessoryPx,
-            colors = colors,
-            linkTaps = linkTaps,
-            imageHeightPx = { block ->
-                val size = imageMeasurements?.measurementOf(block) as? NoteImageMeasurement.Measured
-                with(density) { reservedImageHeightDp(widthDp, size?.width ?: 0, size?.height ?: 0, pendingImageHeightDp).dp.toPx() }
-            }
-        )
-        val out = ArrayList<MeasuredSpreadBlock>(blocks.size)
-        var sliceStart = System.nanoTime()
-        blocks.forEachIndexed { index, block ->
-            currentMeasureGate(index)
-            out += measureSpreadBlock(block, inputs)
-            if (System.nanoTime() - sliceStart > MEASURE_SLICE_NANOS) {
-                measured = SpreadMeasured(out.toList(), complete = false)
-                withFrameNanos { }
-                sliceStart = System.nanoTime()
-            }
-        }
-        measured = SpreadMeasured(out.toList(), complete = true)
-    }
-
-    // 読む位置。ノートの画面の保存値に置き、組むたびに今のノートと本文の位置の口へ合わせる。
-    // **保存値から戻した直後も同じ照合を通す** — 留守の間の送りや、別のノートを開いたことを見落とさない。
-    var saved by rememberSaveable(stateSaver = ReadingSaver) { mutableStateOf<SpreadReading?>(null) }
-    val parse = remember(blocks) { blocks.hashCode() }
-    // **組み始めて保存値を戻すときは、ブロックを一覧から取る**（→ restoredAnchor）。保存値は見開きを組むまで消費されずに残るので、
-    // その間にふだんの画面で読み進めた位置（口を通らない指のスクロール）や、適用済みの送り・解析し直しの後の位置を見落とさない。
-    var restoring by remember { mutableStateOf(true) }
-    val listBlock = { position.listState.firstVisibleItemIndex }
-    val base = if (restoring) restoreSpreadReading(saved, noteKey, parse, blocks.size, position.port, position.lastRequest, listBlock) else saved
-    val reading = reconcileSpreadReading(base, noteKey, parse, blocks.size, position.port, position.lastRequest, listBlock)
-    SideEffect {
-        restoring = false
-        if (saved != reading) saved = reading
-        // **読む位置のブロックが一覧と食い違えば書き戻す**（めくりと同じ自分の書き戻し）。解析し直しで範囲へ収めたときも書かないと、
-        // 離れて直接戻ったときに一覧のブロックが古く、戻すときの規則が古いほうを採る（→ features/note_spread.md §5「読む位置」）。
-        if (reading.anchor.blockIndex != position.listState.firstVisibleItemIndex) {
-            position.moveTo(reading.anchor.blockIndex, source = BodyPositionSource.SpreadTurn)
-        }
-    }
-    val anchor = reading.anchor
-
+    // ページの幅は親の実際の幅に収まる画素で決め、計測と描画の両方へ渡す（→ spreadPageWidthPx）。
     BoxWithConstraints(modifier = modifier) {
-        val pageContentHeight = with(density) { (maxHeight - PagePadding * 2).toPx() }
+        val density = LocalDensity.current
+        val currentMeasureGate by rememberUpdatedState(measureGate)
+        val blocks = sectionModel.blocks
+        val measurer = rememberTextMeasurer(cacheSize = 0)
+        val baseStyle = LocalTextStyle.current
+        val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = ReadingChip, link = ReadingAccent)
+        val currentOnLink by rememberUpdatedState(onLink)
+        val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
+        val pageWidthPx = spreadPageWidthPx(pageWidth, gutter, if (constraints.hasBoundedWidth) constraints.maxWidth else null, density)
+        val pagePaperWidth = with(density) { pageWidthPx.toDp() }
+        val textWidthPx = spreadTextWidthPx(pageWidthPx, density)
+        val accessoryPx = if (headingAccessory != null) with(density) { HeadingAccessoryWidth.roundToPx() } else 0
+        val pendingImageHeightDp = LocalConfiguration.current.screenHeightDp
+        // 画像の寸法が届くたびに組み直す（読む位置は保つ → 判断11）。寸法は共有の入れ物の観測できる状態から読む。
+        val imageSizes = blocks.filterIsInstance<MarkdownBlock.Image>().map { imageMeasurements?.measurementOf(it) }
+
+        // 本文の画像は、組む前に寸法を測る（描く前に高さが要る）。測り終えれば入れ物が替わり、上の鍵で組み直す。
+        LaunchedEffect(blocks, imageLoader, imageMeasurements) {
+            if (imageLoader == null || imageMeasurements == null) return@LaunchedEffect
+            blocks.filterIsInstance<MarkdownBlock.Image>().filter { imageMeasurements.measurementOf(it) == null }.forEach { block ->
+                imageMeasurements.record(block, imageLoader.measure(block))
+            }
+        }
+
+        var measured by remember(noteKey, blocks, textWidthPx, density, baseStyle, colors, linkTaps, accessoryPx, imageSizes) {
+            mutableStateOf(SpreadMeasured(emptyList(), complete = blocks.isEmpty()))
+        }
+        LaunchedEffect(noteKey, blocks, textWidthPx, density, baseStyle, colors, linkTaps, accessoryPx, imageSizes) {
+            val widthDp = with(density) { textWidthPx.toDp().value.toInt() }
+            val inputs = SpreadMeasureInputs(
+                measurer = measurer,
+                baseStyle = baseStyle,
+                density = density,
+                textWidthPx = textWidthPx,
+                headingAccessoryPx = accessoryPx,
+                colors = colors,
+                linkTaps = linkTaps,
+                imageHeightPx = { block ->
+                    val size = imageMeasurements?.measurementOf(block) as? NoteImageMeasurement.Measured
+                    with(density) { reservedImageHeightDp(widthDp, size?.width ?: 0, size?.height ?: 0, pendingImageHeightDp).dp.toPx() }
+                }
+            )
+            val out = ArrayList<MeasuredSpreadBlock>(blocks.size)
+            var sliceStart = System.nanoTime()
+            blocks.forEachIndexed { index, block ->
+                currentMeasureGate(index)
+                out += measureSpreadBlock(block, inputs, lead = isLeadParagraph(index, block))
+                if (System.nanoTime() - sliceStart > MEASURE_SLICE_NANOS) {
+                    measured = SpreadMeasured(out.toList(), complete = false)
+                    withFrameNanos { }
+                    sliceStart = System.nanoTime()
+                }
+            }
+            measured = SpreadMeasured(out.toList(), complete = true)
+        }
+
+        // 読む位置。ノートの画面の保存値に置き、組むたびに今のノートと本文の位置の口へ合わせる。
+        // **保存値から戻した直後も同じ照合を通す** — 留守の間の送りや、別のノートを開いたことを見落とさない。
+        var saved by rememberSaveable(stateSaver = ReadingSaver) { mutableStateOf<SpreadReading?>(null) }
+        val parse = remember(blocks) { blocks.hashCode() }
+        // **組み始めて保存値を戻すときは、ブロックを一覧から取る**（→ restoredAnchor）。保存値は見開きを組むまで消費されずに残るので、
+        // その間にふだんの画面で読み進めた位置（口を通らない指のスクロール）や、適用済みの送り・解析し直しの後の位置を見落とさない。
+        var restoring by remember { mutableStateOf(true) }
+        val listBlock = { position.listState.firstVisibleItemIndex }
+        val base = if (restoring) restoreSpreadReading(saved, noteKey, parse, blocks.size, position.port, position.lastRequest, listBlock) else saved
+        val reading = reconcileSpreadReading(base, noteKey, parse, blocks.size, position.port, position.lastRequest, listBlock)
+        SideEffect {
+            restoring = false
+            if (saved != reading) saved = reading
+            // **読む位置のブロックが一覧と食い違えば書き戻す**（めくりと同じ自分の書き戻し）。解析し直しで範囲へ収めたときも書かないと、
+            // 離れて直接戻ったときに一覧のブロックが古く、戻すときの規則が古いほうを採る（→ features/note_spread.md §5「読む位置」）。
+            if (reading.anchor.blockIndex != position.listState.firstVisibleItemIndex) {
+                position.moveTo(reading.anchor.blockIndex, source = BodyPositionSource.SpreadTurn)
+            }
+        }
+        val anchor = reading.anchor
+
+        val pageContentHeight = spreadPageContentHeightPx(constraints.maxHeight, density)
         var cardHeightPx by remember(noteKey) { mutableIntStateOf(0) }
         // 再会カードを測ったか。**測る前の高さ（前に測った値か0）で組んだ見開きは、読書の記録へ送らない。** カードが出入りするたびに測り直す。
         var cardMeasured by remember(noteKey, leftPageTop != null) { mutableStateOf(false) }
-        val leftHeight = pageContentHeight - if (leftPageTop != null) cardHeightPx + with(density) { CardGap.toPx() } else 0f
-        val titleHeight = remember(title, textWidthPx, density, baseStyle) {
-            val layout = measurer.measure(AnnotatedString(title), baseStyle.merge(TitleStyle), constraints = Constraints(maxWidth = textWidthPx), density = density)
-            layout.size.height + with(density) { TitleGap.toPx() }
+        val leftHeight = pageContentHeight - if (leftPageTop != null) (cardHeightPx + with(density) { CardGap.roundToPx() }).toFloat() else 0f
+        val tagRowHeight = remember(sectionModel.tags, textWidthPx, density, baseStyle) {
+            noteTagRowHeightPx(measurer, baseStyle, density, textWidthPx, sectionModel.tags)
         }
-        val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.toPx() }
-        val fitHeight = minOf(leftHeight, pageContentHeight, leftHeight - titleHeight)
-        val pages = remember(measured, leftHeight, pageContentHeight, titleHeight, spacingPx) {
-            paginateSpread(
+        // 描画の spacedBy は間を画素へ丸めて置く。
+        val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.roundToPx().toFloat() }
+        val fitHeight = minOf(leftHeight, pageContentHeight)
+        // タグの札は測り終えてから、最後のページの末尾（入らなければ足した1枚）に置く。切れ端にはしない。
+        val trailer = remember(measured, leftHeight, pageContentHeight, tagRowHeight, spacingPx) {
+            val composed = paginateSpread(
                 blocks = measured.blocks.map { it.spread },
                 leftPageHeight = leftHeight,
                 rightPageHeight = pageContentHeight,
-                firstPageHeight = leftHeight - titleHeight,
                 blockSpacing = spacingPx,
                 complete = measured.complete
             )
+            (if (measured.complete) placeSpreadTrailer(composed, tagRowHeight, leftHeight, pageContentHeight, blockSpacing = spacingPx) else null)
+                ?: SpreadTrailer(composed, pageIndex = -1)
         }
+        val pages = trailer.pages
         // 測り終えるまでは、最後のページがまだ伸びるか、まとまりの判定を待って止めている。両方のページが組み上がった見開きだけを出す。
         val available = readySpreadCount(pages, measured.complete)
         val target = spreadIndexOf(pages, anchor)
         val ready = measured.complete || target < available
 
         if (!ready) {
-            SpreadComposing(paperColor, pageWidth, gutter)
+            SpreadComposing(paperColor, pagePaperWidth, gutter)
             return@BoxWithConstraints
         }
 
@@ -253,7 +262,10 @@ internal fun NoteSpread(
         val currentShown by rememberUpdatedState(shown)
 
         // 組み直しや外からの送りで、読む位置を含む見開きが替わったら、そこを出す。めくりとは数えない（読む位置を替えない）。
-        LaunchedEffect(target, available) {
+        // **外からの送りの番号も契機にする。** タグの札だけのページは読む位置を持たないので、そこから前の見開きのブロックへ
+        // 送ると、読む位置の見開き（target）は変わらないまま。番号で合わせ直さないと、タグのページに残る（→ placeSpreadTrailer）。
+        val externalRequest = position.lastRequest.takeIf { it.source == BodyPositionSource.External }?.request
+        LaunchedEffect(target, available, externalRequest) {
             val page = target.coerceIn(0, available - 1)
             if (pagerState.currentPage != page) pagerState.scrollToPage(page)
         }
@@ -340,7 +352,7 @@ internal fun NoteSpread(
                     // 見開きは動かさない。ページャが送るために与えた変位を打ち消して、定位置へ置き直す。
                     .graphicsLayer { translationX = size.width * spreadTurnLayers(offset()).slotShift }
             ) {
-                Column(modifier = Modifier.width(pageWidth).fillMaxHeight().spreadTurnFace(rightPage = false, offset, gutterPx, liftRoomPx)) {
+                Column(modifier = Modifier.width(pagePaperWidth).fillMaxHeight().spreadTurnFace(rightPage = false, offset, gutterPx, liftRoomPx)) {
                     if (leftPageTop != null) {
                         Box(
                             modifier = Modifier.onSizeChanged {
@@ -352,8 +364,7 @@ internal fun NoteSpread(
                     }
                     SpreadPageView(
                         page = pages.getOrNull(spread * 2),
-                        showTitle = spread == 0,
-                        title = title,
+                        tags = sectionModel.tags.takeIf { trailer.pageIndex == spread * 2 },
                         measured = measured.blocks,
                         fitHeightPx = fitHeight,
                         paperColor = paperColor,
@@ -368,8 +379,7 @@ internal fun NoteSpread(
                 Spacer(modifier = Modifier.width(gutter))
                 SpreadPageView(
                     page = pages.getOrNull(spread * 2 + 1),
-                    showTitle = false,
-                    title = title,
+                    tags = sectionModel.tags.takeIf { trailer.pageIndex == spread * 2 + 1 },
                     measured = measured.blocks,
                     fitHeightPx = fitHeight,
                     paperColor = paperColor,
@@ -378,7 +388,7 @@ internal fun NoteSpread(
                     imageMeasurements = imageMeasurements,
                     headingAccessory = headingAccessory,
                     onQuote = onQuote,
-                    modifier = Modifier.width(pageWidth).fillMaxHeight().spreadTurnFace(rightPage = true, offset, gutterPx, liftRoomPx)
+                    modifier = Modifier.width(pagePaperWidth).fillMaxHeight().spreadTurnFace(rightPage = true, offset, gutterPx, liftRoomPx)
                 )
             }
         }
@@ -401,12 +411,14 @@ private fun Modifier.spreadTurnFace(rightPage: Boolean, offset: () -> Float, gut
         shape = ReadingSurfaceShape
     }
 
-/** 1ページ。読む面（紙の色は年代、形は読む面）に、切れ端を本文の順で並べる。[page] が null なら空のページ（最後の見開きの右）。 */
+/**
+ * 1ページ。読む面（紙の色は年代、形は読む面）に、切れ端を本文の順で並べる。[page] が null なら空のページ（最後の見開きの右）。
+ * [tags] を渡したページだけ、切れ端の後にタグの札の行を置く（→ placeSpreadTrailer が測った高さと同じ並び）。
+ */
 @Composable
 private fun SpreadPageView(
     page: SpreadPage?,
-    showTitle: Boolean,
-    title: String,
+    tags: List<String>?,
     measured: List<MeasuredSpreadBlock>,
     fitHeightPx: Float,
     paperColor: Color,
@@ -436,11 +448,7 @@ private fun SpreadPageView(
                         .fillMaxSize()
                         .onGloballyPositioned { pageTop[0] = it.boundsInRoot().top }
                 ) {
-                    Column(modifier = Modifier.padding(PagePadding)) {
-                        if (showTitle) {
-                            Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(TitleStyle))
-                            Spacer(modifier = Modifier.height(TitleGap))
-                        }
+                    Column(modifier = Modifier.padding(PagePadding).widthIn(max = MarkdownBodyStyle.ColumnMaxWidth)) {
                         Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)) {
                             page?.slices?.forEachIndexed { k, slice ->
                                 measured.getOrNull(slice.blockIndex)?.let { block ->
@@ -454,6 +462,7 @@ private fun SpreadPageView(
                                     }
                                 }
                             }
+                            if (!tags.isNullOrEmpty()) NoteTagRow(tags)
                         }
                     }
                 }
@@ -540,9 +549,29 @@ private val ReadingSaver = Saver<SpreadReading?, ArrayList<Any>>(
 /** ページの内側の余白（→ [SPREAD_PAGE_PADDING_DP]）。 */
 private val PagePadding = SPREAD_PAGE_PADDING_DP.dp
 
-/** 最初のページの題名。縦の流しの本文の面と同じ書式と、本文との間。 */
-private val TitleStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)
-private val TitleGap = 12.dp
+/**
+ * 左右のページの幅（画素）。**左右とも同じ幅で、溝と合わせて親の幅 [containerWidthPx] に収まる。**
+ * 親の `Row` は左のページと溝を測った後、右のページへ残りの幅しか渡さない。[pageWidth] を丸めた幅で左右を求めると、
+ * 端数の密度では合計が親を1画素超え、右のページだけ計測より狭くなって折り返しがずれる。親の幅が分からなければ [pageWidth] を丸める。
+ */
+internal fun spreadPageWidthPx(pageWidth: Dp, gutter: Dp, containerWidthPx: Int?, density: Density): Int = with(density) {
+    val wanted = pageWidth.roundToPx()
+    if (containerWidthPx == null) wanted else minOf(wanted, (containerWidthPx - gutter.roundToPx()) / 2)
+}
+
+/**
+ * 幅 [pageWidthPx] のページに組む本文の列の幅。**描画と同じく、左右の余白・列の上限を1つずつ画素へ丸めてから引く**
+ * （`padding`・`widthIn` はそれぞれ丸める。足してから丸めると、端数の密度で計測の幅が描画より1画素広くなり、折り返しを取り損ねる）。
+ * 列の上限は縦の流しと同じ（→ MarkdownBodyStyle.ColumnMaxWidth）。
+ */
+internal fun spreadTextWidthPx(pageWidthPx: Int, density: Density): Int = with(density) {
+    minOf(pageWidthPx - PagePadding.roundToPx() * 2, MarkdownBodyStyle.ColumnMaxWidth.roundToPx())
+}
+
+/** 高さ [maxHeightPx] のページで本文を置ける高さ。上下の余白は描画と同じく片側ずつ画素へ丸めて引く。 */
+internal fun spreadPageContentHeightPx(maxHeightPx: Int, density: Density): Float = with(density) {
+    (maxHeightPx - PagePadding.roundToPx() * 2).toFloat()
+}
 
 /** 再会カードと左ページの間。 */
 private val CardGap = 8.dp

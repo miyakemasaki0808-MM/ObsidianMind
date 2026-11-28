@@ -41,6 +41,23 @@ internal class NotePaperTones(
     }
 }
 
+/** コールアウトの面の1種類。[surface] は紙に敷く薄い面、[title] は頭の線画と言葉の色。 */
+internal class CalloutFaceTone(val surface: Color, val title: Color)
+
+/**
+ * コールアウトの面の色（→ docs/dev/features/note_typesetting.md §5.4）。種類を見分ける主役は頭の言葉で、色は補助。
+ * 色はアプリにある色に寄せる（まとめ＝補足の青灰・問い＝関連ノートの紫・例とヒント＝AI推薦の緑・注意＝冊子の黄土）。
+ */
+internal class CalloutFaceTones(
+    val summary: CalloutFaceTone,
+    val question: CalloutFaceTone,
+    val example: CalloutFaceTone,
+    val caution: CalloutFaceTone
+) {
+    /** 検査が全種類を見るための一覧。 */
+    val all: List<CalloutFaceTone> get() = listOf(summary, question, example, caution)
+}
+
 /**
  * 冊子の紙の地色（分野 → 色）。**色を持つのは一般語彙の6つだけ。**
  *
@@ -119,6 +136,25 @@ internal class AppColorScheme(
     val onVibrant: Color,
     val onVibrantMuted: Color,
     val linkText: Color,
+    // 読む面のアクセント（本文のリンク・見出しの線・箇条の点）。関連ノートの見出しと同じ値だが別の役割で、
+    // 片方を動かしたときにもう片方が付いて動かないよう別に持つ（→ docs/dev/features/note_typesetting.md §5.2）。
+    val readingAccent: Color,
+    // 読む面のプレートの縁。ライトは影で浮くので縁を持たず（透明）、ダークは影が見えないのでごく細い明るい縁で浮かせる。
+    val readingPlateRim: Color,
+    // プレートの上端に重ねるごく淡い光（何も表さない）。ライトは光を当てない（透明）。
+    val readingPlateLight: Color,
+    // 読む画面の場に置く部品（再会カード）の面。ダークでは紙より1段明るくする。
+    val readingCard: Color,
+    // 読む面の小さな札（題の欄のタグ）の面。
+    val readingChip: Color,
+    // 番号付きの箇条の番号の札の面。字は読む面のアクセント（藍）。
+    val readingBadge: Color,
+    // コードの枠（暗い窓）と、その上の字・言語の札・頭の罫。窓はテーマに関わらず暗い。
+    val codeWindow: Color,
+    val onCodeWindow: Color,
+    val codeWindowLabel: Color,
+    val codeWindowRule: Color,
+    val calloutFaces: CalloutFaceTones,
     // 意味色
     val errorText: Color,
     // 塗りとして使うエラー色は文字色と別に持つ。errorText を Badge の containerColor に
@@ -169,10 +205,16 @@ internal class AppColorScheme(
     // （テストは最も暗い停止色だけを測っていた）。`Brush` から色は取り出せないので、
     // **単一ソースにするには色の側を持つしかない**。
     val appGradientStops: List<Color>,
-    val readingGradientStops: List<Color>
+    val readingGradientStops: List<Color>,
+    // ノートを読む画面の場の停止色。強さ（鮮やか／淡い）ごとに持つ。ライトの鮮やかは [readingGradientStops] と同じ3色。
+    // ダークは強さによらず夜の紺（→ docs/dev/features/note_typesetting.md §5.6）で、起動の画面と冊子の地（readingGradientStops）とは別。
+    val readingGroundVividStops: List<Color>,
+    val readingGroundPaleStops: List<Color>
 ) {
     val appGradient: Brush = diagonalGradient(appGradientStops)
     val readingGradient: Brush = diagonalGradient(readingGradientStops)
+    val readingGroundVivid: Brush = diagonalGradient(readingGroundVividStops)
+    val readingGroundPale: Brush = diagonalGradient(readingGroundPaleStops)
 }
 
 /** 左下から右上へ流す。全画面で向きを揃えるため、向きは [diagonalGradientOver] だけが決める。 */
@@ -202,6 +244,14 @@ internal val LocalAppColors = staticCompositionLocalOf { LightAppColors }
  */
 private val LocalNotePaperAging = staticCompositionLocalOf { false }
 
+/** 読む画面の場を鮮やかにするか。**[AppTheme] だけが提供する。** 既定は淡い（→ docs/dev/features/note_typesetting.md 判断17）。 */
+private val LocalReadingGroundVivid = staticCompositionLocalOf { false }
+
+/** 読む画面の場を鮮やかにするか。画面は [ReadingGround]・[ReadingGroundStops] を通して読み、これを直接読まない。 */
+@Composable
+@ReadOnlyComposable
+internal fun readingGroundVivid(): Boolean = LocalReadingGroundVivid.current
+
 /**
  * 放置期間の段階を実際の色へ写す唯一の窓口。**画面はこれだけを呼ぶ。**
  *
@@ -212,7 +262,8 @@ private val LocalNotePaperAging = staticCompositionLocalOf { false }
 @ReadOnlyComposable
 internal fun notePaperColor(tone: NotePaperTone): Color {
     val colors = LocalAppColors.current
-    return if (LocalNotePaperAging.current) colors.notePaper.color(tone) else colors.panel
+    // 無効時は最も新しい段階の紙。ライトはパネル色と同じ値で、ダークは読む画面の夜の紺。
+    return if (LocalNotePaperAging.current) colors.notePaper.color(tone) else colors.notePaper.fresh
 }
 
 /**
@@ -232,6 +283,7 @@ internal fun notePaperColor(tone: NotePaperTone): Color {
 internal fun AppTheme(
     darkTheme: Boolean,
     notePaperAging: Boolean = false,
+    vividReadingGround: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colors = if (darkTheme) DarkAppColors else LightAppColors
@@ -255,7 +307,8 @@ internal fun AppTheme(
     // → docs/dev/features/note_age_paper.md 判断5
     CompositionLocalProvider(
         LocalAppColors provides colors,
-        LocalNotePaperAging provides (notePaperAging && !darkTheme)
+        LocalNotePaperAging provides (notePaperAging && !darkTheme),
+        LocalReadingGroundVivid provides vividReadingGround
     ) {
         MaterialTheme(colorScheme = material, content = content)
     }

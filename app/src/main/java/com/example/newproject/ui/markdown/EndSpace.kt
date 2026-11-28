@@ -50,9 +50,9 @@ internal class EndSpace {
         placedBlock = null
     }
 
-    /** [request] がまだ最新なら、余白を [px] 足す。 */
+    /** [request] がまだ最新なら、余白を [px] 足す。負なら減らす（0 を下回らない）。 */
     fun grow(request: EndSpaceRequest, px: Int) {
-        if (wanted == request) bottomPx += px
+        if (wanted == request) bottomPx = (bottomPx + px).coerceAtLeast(0)
     }
 
     /** [request] を置き終えた（利用者が自分で送った）。 */
@@ -110,15 +110,30 @@ private fun endSpaceSaver(listState: LazyListState): Saver<EndSpace, IntArray> =
 )
 
 /**
- * 送ったブロックを上端に置くのに、末尾の余白がいくら足りないか（px）。**まだ決められなければ null。**
+ * 送ったブロックを上端に置くのに、末尾の余白がいくら足りないか（px）。負なら余っている分。**まだ決められなければ null。**
  *
  * - [targetOffset] は送ったブロックの上端の位置（一覧の上端から。描かれていなければ null）
  * - [canScrollForward] は一覧がまだ先へ送れるか。先へ送れるのに上端に無いのは、送りがまだ届いていない配置である
  * - [paddingApplied] は今の余白で組まれた配置か。余白を替えた直後の古い配置からは決めない
+ * - [freeBelowLast] は上端に置いた配置で、最後のブロックの下端から窓の下端までの高さ（最後のブロックが窓の外なら null）。
+ *   上端に置いたまま要る余白はちょうどこの高さで、[bottomPx] がこれを超える分は余っている
+ *
+ * **余白はその窓で測り直す**（→ features/note_typesetting.md 判断12）。全画面のような高い窓で足した余白を低い窓へ運ぶと、
+ * 見出しは上端のままでも末尾へ送ると余白だけが見える。余っている分を返して減らす。
  */
-internal fun endSpaceShortfall(targetOffset: Int?, canScrollForward: Boolean, paddingApplied: Boolean): Int? = when {
+internal fun endSpaceShortfall(
+    targetOffset: Int?,
+    canScrollForward: Boolean,
+    paddingApplied: Boolean,
+    freeBelowLast: Int? = null,
+    bottomPx: Int = 0
+): Int? = when {
     !paddingApplied || targetOffset == null -> null
-    targetOffset <= 0 -> 0
+    targetOffset <= 0 -> {
+        val needed = (freeBelowLast ?: 0).coerceAtLeast(0)
+        val excess = bottomPx - needed
+        if (excess > SETTLE_TOLERANCE_PX) -excess else 0
+    }
     canScrollForward -> null
     else -> targetOffset
 }
@@ -145,7 +160,11 @@ internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, requ
             shortfall = endSpaceShortfall(
                 targetOffset = layout.visibleItemsInfo.firstOrNull { it.index == request.block }?.offset,
                 canScrollForward = listState.canScrollForward,
-                paddingApplied = abs(layout.afterContentPadding - space.bottomPx) <= 1
+                paddingApplied = abs(layout.afterContentPadding - space.bottomPx) <= 1,
+                freeBelowLast = layout.visibleItemsInfo.lastOrNull()
+                    ?.takeIf { it.index == layout.totalItemsCount - 1 }
+                    ?.let { layout.viewportSize.height - (it.offset + it.size) },
+                bottomPx = space.bottomPx
             )
         )
     }.takeWhile { !it.scrolling }.collect { view ->
@@ -156,6 +175,8 @@ internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, requ
         when (val shortfall = view.shortfall) {
             null -> Unit
             0 -> grows = 0
+            // 余っている分を減らす。見出しは上端のままなので送り直さない。
+            in Int.MIN_VALUE until 0 -> space.grow(request, shortfall)
             else -> if (grows < SETTLE_GROWS) {
                 grows++
                 space.grow(request, shortfall)
@@ -179,3 +200,6 @@ internal suspend fun placeBlockAtTop(listState: LazyListState, space: EndSpace, 
 }
 
 private const val SETTLE_GROWS = 3
+
+/** px と dp の換算で残る1px。これ以下の余りは減らさない（足しと減らしが交互に走らないように）。 */
+private const val SETTLE_TOLERANCE_PX = 1

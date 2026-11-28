@@ -31,7 +31,9 @@ class NoteSectionModel internal constructor(
      * 最初の見出しより前の本文（見出しの無いノートは全体）を LLM 入力用に組み直したもの。
      * **解析と一緒に Main の外で作る** — 見出しの無いノートでは本文全体（最大1MB）に比例する。
      */
-    private val openingText: String
+    private val openingText: String,
+    /** frontmatter の `tags`。題の欄に札で並べる（→ features/note_typesetting.md §5.3）。本文と同じ解析で読み、別々に届けない。 */
+    val tags: List<String> = emptyList()
 ) {
     /**
      * 見出しの索引。**解析と一緒に作る**ので、画面は見出しをたどらずに節を引き、メモを照合できる（→ [HeadingIndex]）。
@@ -298,7 +300,8 @@ fun buildNoteSectionModel(content: String): NoteSectionModel {
     }
 
     val opening = blocks.subList(0, headingIndices.firstOrNull() ?: blocks.size)
-    return NoteSectionModel(headingIndices, sections, blocks, blocksToMarkdown(opening))
+    val tags = frontmatterLines(content)?.let { frontmatterList(it, "tags") }.orEmpty()
+    return NoteSectionModel(headingIndices, sections, blocks, blocksToMarkdown(opening), tags)
 }
 
 /**

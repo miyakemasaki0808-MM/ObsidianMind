@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.OrphanCandidate
 import com.example.newproject.model.WithheldOrphans
 import com.example.newproject.model.state.ReadingTraceCleanupState
+import com.example.newproject.ui.noCandidateText
 import com.example.newproject.ui.blockedExplanation
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
@@ -118,7 +119,7 @@ fun ReadingTraceCleanupScreen(
             // 「存在しない」と断定しない。**現在の走査で見つからない**が事実の限界で、
             // 同期途中なら後から現れうる（→ lessons L24）。
             body = "「${candidate.noteTitle}」の読書記録を削除します。\n" +
-                "現在の走査ではこのノートが見つかりません。ノート本文は削除されません。",
+                "いまの Vault では、このノートが見つかりません。ノート本文は削除されません。",
             onConfirm = {
                 onDelete(candidate.key)
                 pendingDelete = null
@@ -173,7 +174,7 @@ private fun SuccessBody(
         if (state.deleteFailureCount > 0) {
             NoticeCard(
                 title = "${state.deleteFailureCount}件を削除できませんでした",
-                body = "しばらくしてからもう一度お試しください。",
+                body = "しばらくしてから、もう一度試せます。",
                 emphasis = true
             )
             Spacer(modifier = Modifier.height(14.dp))
@@ -185,8 +186,7 @@ private fun SuccessBody(
         if (state.unverifiedCount > 0) {
             NoticeCard(
                 title = "${state.unverifiedCount}件は削除してよいか確認できませんでした",
-                body = "ノートのフォルダを読み取れなかったため、消さずに残しています。" +
-                    "同期の完了を待ってから開き直してください。",
+                body = "ノートのフォルダを読み取れなかったので残しています。同期が終わったら開き直せます。",
                 emphasis = true
             )
             Spacer(modifier = Modifier.height(14.dp))
@@ -197,7 +197,7 @@ private fun SuccessBody(
             // 「候補ゼロ」を明示する。無表示にすると保留中の状態と見分けが付かない。
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "対応するノートが見つからない痕跡はありませんでした。",
+                text = noCandidateText(state.withheld.size),
                 color = OnSurfaceFaint,
                 fontSize = 14.sp
             )

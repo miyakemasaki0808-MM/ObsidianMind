@@ -24,6 +24,7 @@ import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.ui.screen.DISTILL_CONFIRM_BOLD_HEAVY
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.DistillRangeSheetContent
 import com.example.newproject.ui.screen.distillCandidateCheckLabel
@@ -220,9 +221,10 @@ class DistillRangeAdjustUiTest {
             }
         }
 
-        composeRule.onNodeWithText("太字が目安の30%を超えます", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("太字が多めです", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("プレビュー").performScrollTo().assertIsEnabled().performClick()
-        composeRule.onNodeWithText("変更後の太字率は 42.0% で", substring = true).assertIsDisplayed()
+        // 保存の確認は目安の数を言わず、多めになることだけを言う（→ system/ui_copy.md §2 の3）。
+        composeRule.onNodeWithText(DISTILL_CONFIRM_BOLD_HEAVY).assertIsDisplayed()
     }
 
     @Test

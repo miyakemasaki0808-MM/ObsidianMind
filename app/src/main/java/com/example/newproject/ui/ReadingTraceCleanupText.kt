@@ -18,14 +18,11 @@ import com.example.newproject.model.state.ReadingTraceCleanupState
 /** 判定ごと見送ったときの説明。**「孤児は無かった」と読めない言い方にする。** */
 fun blockedExplanation(state: ReadingTraceCleanupState.Blocked): String = when (state.reason) {
     OrphanBlockReason.VAULT_ROOT_UNREADABLE ->
-        "Vault のフォルダをうまく読み取れませんでした。" +
-            "この状態ではすべてのノートが「無い」ように見えてしまうため、判定していません。" +
-            "同期の完了を待ってから開き直してください。"
+        "Vault のフォルダを読み取れなかったので、判定していません。同期が終わったら開き直せます。"
 
     OrphanBlockReason.TOO_MANY_CANDIDATES ->
-        "見つからないノートが${state.candidateCount}件と多すぎます。" +
-            "Vault の同期が終わっていないか、別のフォルダが選ばれている可能性があります。" +
-            "念のため何も削除対象にしていません。"
+        "見つからないノートが${state.candidateCount}件と多いので、削除の対象にしていません。" +
+            "同期の途中か、別のフォルダかもしれません。"
 }
 
 /** 保留した一群の見出し。ルート直下と読み取り失敗は「フォルダ名」で語れない。 */
@@ -38,12 +35,19 @@ fun withheldLocation(group: WithheldOrphans): String = when {
 /** 保留した理由。**シャドーモードではここが観測対象そのもの。** */
 fun withheldReasonText(group: WithheldOrphans): String = when (group.reason) {
     OrphanWithholdReason.FOLDER_WIDE_ABSENCE ->
-        "同じフォルダのノートがまとめて見つかりませんでした。" +
-            "フォルダごと削除した場合と、フォルダを読み取れなかった場合を区別できないため残します。"
+        // 判定はフォルダ全体の不在を確かめていない（同じ場所の複数の欠けを見ているだけ）。フォルダが無いと言い切らない。
+        "同じ場所のノートがいくつも見つかりません。読み取れなかっただけかもしれないので残します。"
 
     OrphanWithholdReason.UNREADABLE_FOLDER ->
-        "このフォルダの中身を読み取れませんでした。ノートが本当に無いのかを確認できません。"
+        "このフォルダを読み取れませんでした。ノートがあるか確かめられません。"
 
     OrphanWithholdReason.UNRESOLVABLE ->
-        "痕跡そのものを読み取れませんでした。何を削除することになるのか確認できないため残します。"
+        "痕跡を読み取れないので残します。"
 }
+
+/**
+ * 削除の候補が0件のときの文。**保留した群があるときに「見つからない痕跡は無い」と言わない** — 保留は見つからない痕跡を
+ * 残したものなので、同じ画面で「無い」と「残した」を同時に言うことになる。保留があれば、消せる候補が無いことだけを言う。
+ */
+fun noCandidateText(withheldGroups: Int): String =
+    if (withheldGroups > 0) "いま消せる候補はありません。" else "対応するノートが見つからない痕跡はありませんでした。"

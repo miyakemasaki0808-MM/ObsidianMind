@@ -59,8 +59,8 @@ import androidx.compose.ui.unit.toSize
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
-import com.example.newproject.ui.theme.ReadingGradient
-import com.example.newproject.ui.theme.ReadingGradientStops
+import com.example.newproject.ui.theme.ReadingGround
+import com.example.newproject.ui.theme.ReadingGroundStops
 import com.example.newproject.ui.theme.diagonalGradientOver
 import kotlin.math.abs
 
@@ -214,7 +214,7 @@ internal fun DeskGripReach(reachAbove: Dp, start: Dp, width: Dp, onShow: () -> U
 @Composable
 internal fun DeskBar(onHide: () -> Unit, backdrop: DeskBackdrop, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val currentOnHide by rememberUpdatedState(onHide)
-    val stops = ReadingGradientStops
+    val stops = ReadingGroundStops
     var origin by remember { mutableStateOf(Offset.Zero) }
     Column(
         modifier = modifier
@@ -288,7 +288,7 @@ private val DeskBarElevation = 4.dp
 private val DeskBarShadowRoom = 8.dp
 
 /**
- * 読む画面の地（[ReadingGradient]）を敷いた箱の、窓の中の位置と大きさ。帯の地をこれに合わせて描くと、帯が背景の続きに見える（→ [DeskBar]）。
+ * 読む画面の地（[ReadingGround]）を敷いた箱の、窓の中の位置と大きさ。帯の地をこれに合わせて描くと、帯が背景の続きに見える（→ [DeskBar]）。
  */
 @Stable
 internal class DeskBackdrop {

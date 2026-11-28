@@ -22,6 +22,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.TitleMatch
 import com.example.newproject.model.state.TitleSearchState
+import com.example.newproject.ui.screen.SEARCH_ALL_SCOPE_NOTE
 import com.example.newproject.ui.screen.ComposeExploreQuery
 import com.example.newproject.ui.screen.SearchTab
 import com.example.newproject.ui.theme.AppTheme
@@ -123,7 +124,7 @@ class SearchTabTest {
         composeRule.onNodeWithText("すべて").assertIsDisplayed()
         composeRule.onNodeWithText("ideas").assertIsDisplayed()
         composeRule.onNodeWithText("習慣").assertIsDisplayed()
-        composeRule.onNodeWithText("タイトルが近い40本から選びます。意味で探したいときはフォルダを選んでください。").assertIsDisplayed()
+        composeRule.onNodeWithText(SEARCH_ALL_SCOPE_NOTE).assertIsDisplayed()
         input().performImeAction()
         assertEquals(emptyList<String>(), aiQueries)
 
@@ -171,7 +172,7 @@ class SearchTabTest {
 
         composeRule.onNodeWithText("AI").performClick()
 
-        composeRule.onNodeWithText("タイトルが近い40本から選びます。意味で探したいときはフォルダを選んでください。").assertDoesNotExist()
+        composeRule.onNodeWithText(SEARCH_ALL_SCOPE_NOTE).assertDoesNotExist()
     }
 
     private fun input() = composeRule.onNode(hasSetTextAction())

@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
@@ -97,7 +99,7 @@ class SearchController(
                 throw e
             } catch (e: Exception) {
                 if (generation != vaultGeneration()) return@launch
-                notesFailure = e.message ?: "Unknown error"
+                notesFailure = failureText(e, FailureScene.NoteList)
                 searchTitle(titleQuery)
             }
         }
@@ -241,7 +243,7 @@ class SearchController(
                 // 新しい要求に追い越されただけ。エラー表示にはしない。
                 throw e
             } catch (e: Exception) {
-                setStateIfCurrent(requestId, SearchState.Error(e.message ?: "Unknown error"))
+                setStateIfCurrent(requestId, SearchState.Error(failureText(e, FailureScene.Search)))
             }
         }
     }

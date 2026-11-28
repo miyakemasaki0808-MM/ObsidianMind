@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
 import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.SectionChatController
 import com.example.newproject.controller.SectionSummarySource
@@ -317,7 +318,7 @@ class SectionChatControllerTest {
 
         controller.request(B, "B", "Bの本文")
         advanceUntilIdle()
-        assertEquals(SectionChatProblem.GenerationFailed("タイムアウト"), summaryOf(state, B)?.summaryProblem)
+        assertEquals(SectionChatProblem.GenerationFailed(FailureScene.SectionSummary.text), summaryOf(state, B)?.summaryProblem)
 
         ai.onGenerate = { "Bの要約" }
         controller.retry(B)
@@ -639,7 +640,7 @@ class SectionChatControllerTest {
         advanceUntilIdle()
 
         assertEquals("要約", summaryOf(state, A)?.summary)
-        assertEquals(SectionChatProblem.GenerationFailed("タイムアウト"), summaryOf(state, B)?.summaryProblem)
+        assertEquals(SectionChatProblem.GenerationFailed(FailureScene.SectionSummary.text), summaryOf(state, B)?.summaryProblem)
         assertEquals("要約", summaryOf(state, C)?.summary)
         assertFalse(state.value.sectionChat.isBatchRunning)
     }
@@ -844,7 +845,7 @@ class SectionChatControllerTest {
         assertEquals("Aの要約", summaryOf(state, A)?.summary)
     }
 
-    /** 全節の間の「生成を中止」は行に出さないが、遅れて届いた押下で全節を止めない。 */
+    /** 全節の間の「生成を止める」は行に出さないが、遅れて届いた押下で全節を止めない。 */
     @Test
     fun `全節の生成中は1節の中止が効かない`() = runTest {
         val ai = FakeAiClient().suspendGenerations()

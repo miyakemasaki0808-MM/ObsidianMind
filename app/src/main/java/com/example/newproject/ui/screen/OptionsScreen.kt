@@ -26,6 +26,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.notePaperOptionSubtitle
+import com.example.newproject.ui.vaultOptionSubtitle
+import com.example.newproject.ui.vividGroundOptionSubtitle
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.OptionRow
@@ -42,10 +45,12 @@ fun OptionsScreen(
     vaultSelected: Boolean,
     darkTheme: Boolean,
     notePaperAging: Boolean,
+    vividReadingGround: Boolean,
     onSelectVault: () -> Unit,
     onManageData: () -> Unit,
     onToggleDarkTheme: (Boolean) -> Unit,
-    onToggleNotePaperAging: (Boolean) -> Unit
+    onToggleNotePaperAging: (Boolean) -> Unit,
+    onToggleVividReadingGround: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -60,7 +65,7 @@ fun OptionsScreen(
         OptionRow(
             emoji = "📁",
             title = "Vaultを変更",
-            subtitle = if (vaultSelected) "Vaultフォルダ選択済み" else "Vaultフォルダが未選択です",
+            subtitle = vaultOptionSubtitle(vaultSelected),
             onClick = onSelectVault
         )
         Spacer(modifier = Modifier.height(10.dp))
@@ -79,7 +84,7 @@ fun OptionsScreen(
         OptionSwitchRow(
             emoji = if (darkTheme) "🌙" else "☀️",
             title = "ダークモード",
-            subtitle = if (darkTheme) "暗い配色で表示しています" else "明るい配色で表示しています",
+            subtitle = null,
             checked = darkTheme,
             onCheckedChange = onToggleDarkTheme
         )
@@ -87,19 +92,22 @@ fun OptionsScreen(
 
         // ダークでは効かないので、その旨を説明文で言い切る（トグル自体は隠さない。
         // 隠すと「設定が消えた」に見えるうえ、ライトへ戻したときに気づけない）。
-        //
-        // 文言は「更新」と言い切る。判定材料は SAF の最終更新日時であって閲覧履歴ではないので、
-        // 「しばらく開いていない」と書くと、読書痕跡を見ている機能に読める（実際は見ていない）。
         OptionSwitchRow(
             emoji = "📜",
             title = "ノートの紙色",
-            subtitle = when {
-                !notePaperAging -> "どのノートも同じ紙色で表示しています"
-                darkTheme -> "ダークモードの間は紙色を変えません"
-                else -> "更新から時間が経ったノートほど生成りに寄せています"
-            },
+            subtitle = notePaperOptionSubtitle(darkTheme),
             checked = notePaperAging,
             onCheckedChange = onToggleNotePaperAging
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 年代の紙と同じく、ダークでは効かないことを説明文で言い切り、トグルは隠さない。
+        OptionSwitchRow(
+            emoji = "🎨",
+            title = "読む画面の背景を鮮やかにする",
+            subtitle = vividGroundOptionSubtitle(darkTheme),
+            checked = vividReadingGround,
+            onCheckedChange = onToggleVividReadingGround
         )
     }
 }
@@ -108,7 +116,7 @@ fun OptionsScreen(
 private fun OptionSwitchRow(
     emoji: String,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -135,7 +143,7 @@ private fun OptionSwitchRow(
                 Text(title, color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 // 任意のαで薄めない。12sp は AA の大文字例外に入らないので、
                 // 弱い文字は名前付きトークンの範囲から選ぶ（旧 α=0.6 は 4.31 で未達）。
-                Text(subtitle, color = OnSurfaceFaint, fontSize = 12.sp)
+                subtitle?.let { Text(it, color = OnSurfaceFaint, fontSize = 12.sp) }
             }
             Switch(
                 checked = checked,

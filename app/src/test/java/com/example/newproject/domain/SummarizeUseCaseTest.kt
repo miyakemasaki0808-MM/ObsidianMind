@@ -186,7 +186,7 @@ class SummarizeUseCaseTest {
     }
 
     @Test
-    fun `回数制限以外の失敗は例外の文言のまま出す`() = runTest {
+    fun `回数制限以外の失敗は要約の場面の文を出し、例外の文を出さない`() = runTest {
         val error = GenAiException(
             RuntimeException("別の失敗"),
             GenAiException.ErrorCode.REQUEST_PROCESSING_ERROR
@@ -195,7 +195,7 @@ class SummarizeUseCaseTest {
 
         val result = useCase(ai).summarize("ノートA", "Aの本文", passDwell)
 
-        assertEquals(SummaryResult.Error(requireNotNull(error.message)), result)
+        assertEquals(SummaryResult.Error(FailureScene.Summary.text), result)
     }
 
     private fun TestScope.useCase(

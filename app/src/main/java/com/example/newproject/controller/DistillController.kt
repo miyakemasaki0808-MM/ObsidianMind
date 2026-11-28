@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
@@ -119,7 +121,7 @@ internal class DistillController(
 
         val note = currentNote()
         if (note == null) {
-            update(DistillState.Error("先にノートを開いてください。", canRetry = false))
+            update(DistillState.Error("ノートを開くと使えます。", canRetry = false))
             return
         }
         note.distillUnavailableReason?.let { reason ->
@@ -161,7 +163,7 @@ internal class DistillController(
                 throw error
             } catch (error: Exception) {
                 ifCurrent(requestId) {
-                    update(DistillState.Error(error.message ?: "蒸留を開始できませんでした。"))
+                    update(DistillState.Error(failureText(error, FailureScene.DistillStart)))
                 }
             }
         }
@@ -199,7 +201,7 @@ internal class DistillController(
                         analyze(requestId, input)
                     }
                     is DownloadStatus.DownloadFailed -> update(
-                        DistillState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
+                        DistillState.Error(failureText(status.e, FailureScene.ModelDownload))
                     )
                 }
             }
@@ -207,7 +209,7 @@ internal class DistillController(
             throw error
         } catch (error: Exception) {
             ifCurrent(requestId) {
-                update(DistillState.Error(error.message ?: "モデルをダウンロードできませんでした。"))
+                update(DistillState.Error(failureText(error, FailureScene.ModelDownload)))
             }
         }
     }
@@ -240,7 +242,7 @@ internal class DistillController(
         if (!isCurrent(requestId)) return
         val selectedIds = parseDistillResponseIds(response, prompt.validIds)
         if (selectedIds.isEmpty()) {
-            update(DistillState.Error("AIが有効な候補を選べませんでした。もう一度お試しください。"))
+            update(DistillState.Error("AIが候補を選べませんでした。やり直せます。"))
             return
         }
         val byId = prompt.candidates.associateBy { it.id }
@@ -653,7 +655,7 @@ internal class DistillController(
                     val deleted = withContext(ioDispatcher) { persistence.discardResolvedRecovery(assessment) }
                     // 解決済みなら黙って捨てる（起動のたびに知らせる意味がない）。
                     // 削除に失敗したときだけ、確認を促すために表示する。
-                    if (!deleted) applyRecoveryResult(resolvedButUndeletableState())
+                    if (!deleted) applyRecoveryResult(resolvedButUndeletableState(assessment))
                 }
                 DistillRecoveryAssessment.None -> Unit
                 else -> unresolvedRecoveryState(assessment)?.let { applyRecoveryResult(it) }
@@ -683,9 +685,9 @@ internal class DistillController(
         update(next)
     }
 
-    private fun resolvedButUndeletableState() = DistillState.RecoveryRequired(
+    private fun resolvedButUndeletableState(assessment: DistillRecoveryAssessment) = DistillState.RecoveryRequired(
         DistillRecoveryKind.Corrupt,
-        "書き込み内容は安全ですが、古い復旧情報を削除できませんでした。",
+        resolvedButUndeletableMessage(saved = assessment is DistillRecoveryAssessment.ExpectedOutputPresent),
         canRestore = false,
         canExport = false,
         canKeepCurrent = true
@@ -696,21 +698,21 @@ internal class DistillController(
         when (assessment) {
             is DistillRecoveryAssessment.Diverged -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Diverged,
-                "保存が中断されたか、ファイルが外部で変更されました。現在のファイルを維持するか、保存前へ復元してください。",
+                "保存が途中で止まったか、外で書き換えられました。",
                 canRestore = true,
                 canExport = true,
                 canKeepCurrent = true
             )
             is DistillRecoveryAssessment.Inaccessible -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Inaccessible,
-                "元のノートへアクセスできません。保存前の本文を別ファイルへ書き出してください。",
+                "元のノートを開けません。保存前の本文は書き出せます。",
                 canRestore = false,
                 canExport = true,
                 canKeepCurrent = false
             )
             is DistillRecoveryAssessment.Corrupt -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Corrupt,
-                "復旧情報が破損しています。現在のファイルを確認してから復旧情報を破棄してください。",
+                "保存前の本文を読み取れません。今のファイルを確かめて、維持して終えられます。",
                 canRestore = false,
                 canExport = false,
                 canKeepCurrent = true
@@ -728,9 +730,9 @@ internal class DistillController(
             is DistillRecoveryAssessment.ExpectedOutputPresent -> {
                 val deleted = withContext(ioDispatcher) { persistence.discardResolvedRecovery(assessment) }
                 if (deleted) {
-                    DistillState.RecoveryResolved("以前の保存処理を安全に確認しました。もう一度お試しください。")
+                    DistillState.RecoveryResolved("前の保存を確かめました。もう一度始められます。")
                 } else {
-                    resolvedButUndeletableState()
+                    resolvedButUndeletableState(assessment)
                 }
             }
             else -> DistillState.Idle
@@ -743,7 +745,7 @@ internal class DistillController(
             val deleted = withContext(ioDispatcher) { persistence.discardPendingRecovery() }
             update(
                 if (deleted) DistillState.RecoveryResolved("現在のファイルを維持しました。")
-                else DistillState.Error("復旧情報を削除できませんでした。", canRetry = false)
+                else DistillState.Error("保存前の本文を消せませんでした。", canRetry = false)
             )
         }
     }
@@ -788,12 +790,12 @@ internal class DistillController(
                 val deleted = withContext(ioDispatcher) { persistence.discardPendingRecovery() }
                 update(
                     if (deleted) DistillState.RecoveryResolved("保存前の本文を書き出しました。")
-                    else DistillState.Error("書き出し後に復旧情報を削除できませんでした。", canRetry = false)
+                    else DistillState.Error("書き出した後、保存前の本文を消せませんでした。", canRetry = false)
                 )
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                update(DistillState.Error(error.message ?: "元本文を書き出せませんでした。", canRetry = false))
+                update(DistillState.Error(failureText(error, FailureScene.DistillExport), canRetry = false))
             }
         }
     }
@@ -822,3 +824,12 @@ internal class DistillController(
         const val DISTILL_FEATURE_LABEL = "蒸留"
     }
 }
+
+/**
+ * 前の保存の決着がついていて、保存前の本文の控えだけを消せなかったときの文（→ features/reflect_distill.md の起動時の判定）。
+ * **2つの決着を同じ文にしない** — 書き込む前に止まった（[saved] が偽、ノートは元のまま）のに「保存できた」と言うと、
+ * 太字が保存されていないのに保存できたと伝える。
+ */
+internal fun resolvedButUndeletableMessage(saved: Boolean): String =
+    if (saved) "前の保存はできていました。保存前の本文を消せませんでした。"
+    else "前の保存は書き込む前に止まっていて、ノートは元のままです。保存前の本文を消せませんでした。"

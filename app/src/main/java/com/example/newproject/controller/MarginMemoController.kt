@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.QuoteSource
 import com.example.newproject.domain.chosen
@@ -138,7 +140,7 @@ internal class MarginMemoController(
                 throw e
             } catch (e: Exception) {
                 if (!isCurrent(requestId)) return@launch
-                state.update { it.copy(marginMemoState = MarginMemoState.Error(e.message ?: "メモを読めませんでした。")) }
+                state.update { it.copy(marginMemoState = MarginMemoState.Error(failureText(e, FailureScene.MemoLoad))) }
                 return@launch
             }
             if (!isCurrent(requestId)) return@launch

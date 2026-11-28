@@ -1,6 +1,7 @@
 package com.example.newproject.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,6 +63,8 @@ internal fun GradientHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    /** 副題の行に文字の代わりに置くもの。渡すと [subtitle] より優先する（読む画面の居場所の1行 → features/rediscover.md §5.1）。 */
+    subtitleContent: (@Composable () -> Unit)? = null,
     titleSize: TextUnit = 28.sp,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
@@ -90,7 +93,9 @@ internal fun GradientHeader(
             ) {
                 Text(text = title, color = OnGradientHeaderTitle, fontSize = titleSize, fontWeight = FontWeight.Bold)
             }
-            if (subtitle != null) {
+            if (subtitleContent != null) {
+                Box(modifier = Modifier.padding(top = 4.dp)) { subtitleContent() }
+            } else if (subtitle != null) {
                 Text(
                     text = subtitle,
                     color = OnGradientHeaderSubtitle,

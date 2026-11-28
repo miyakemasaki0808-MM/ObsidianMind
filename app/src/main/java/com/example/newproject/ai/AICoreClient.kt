@@ -160,7 +160,7 @@ class AICoreClient(
                     val candidate = model.generateContent(request).candidates.firstOrNull()
                     if (candidate?.finishReason == Candidate.FinishReason.MAX_TOKENS) {
                         throw AiTruncatedException(
-                            "AI応答が長すぎて途中で打ち切られました。もう一度お試しください。"
+                            "AIの応答が長すぎて途中で切れました。もう一度試せます。"
                         )
                     }
                     candidate?.text ?: ""

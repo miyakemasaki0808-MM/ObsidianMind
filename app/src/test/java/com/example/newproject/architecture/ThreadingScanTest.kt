@@ -128,7 +128,8 @@ class ThreadingScanTest {
     fun `本文パネルはノート本文を解析のフォールバックへ落とさない`() {
         assertTrue(
             "$NOTE_COMPONENTS がノート本文を解析結果の到着前に描いています",
-            Regex("""if\s*\(!isNote\s*\|\|\s*blocksForContent\s*!=\s*null\)""").containsMatchIn(mainSource(NOTE_COMPONENTS))
+            // ノートを出している枝（NoteState.Success）でだけ本文を描き、そこでは解析済みのブロックが届くまで描かない。
+            Regex("""if\s*\(precomputedBlocks\s*!=\s*null\)""").containsMatchIn(mainSource(NOTE_COMPONENTS))
         )
     }
 

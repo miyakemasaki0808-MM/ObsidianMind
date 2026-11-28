@@ -133,7 +133,6 @@ class SpreadReducedMotionTest {
                 Box(modifier = Modifier.requiredSize(width = 800.dp, height = 600.dp).testTag(SPREAD_TAG)) {
                     NoteSpread(
                         noteKey = NOTE,
-                        title = "見開き",
                         sectionModel = model,
                         position = remember { BodyPosition(listState) },
                         paperColor = Color.White,

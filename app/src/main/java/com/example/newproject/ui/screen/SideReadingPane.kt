@@ -138,7 +138,7 @@ internal fun SideReadingPane(
             // **失敗は右側だけに出す。** 左の読書と書きかけは止めない。
             is SideReadingState.Failed -> Column(modifier = Modifier.padding(top = 12.dp)) {
                 Text(
-                    text = "このノートを読み込めませんでした。\n${state.message}",
+                    text = state.message,
                     color = OnSurfaceMuted,
                     fontSize = 12.sp
                 )

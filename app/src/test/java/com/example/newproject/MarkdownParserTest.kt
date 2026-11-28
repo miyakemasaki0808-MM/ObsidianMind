@@ -104,6 +104,22 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `コードブロックは開きの行の最初の語を言語として残し、札が無ければ持たない`() {
+        val code = parseMarkdownBlocks("```python title=\"menu.py\"\nprint(1)\n```").filterIsInstance<MarkdownBlock.CodeBlock>().single()
+        assertEquals("python", code.language)
+        assertEquals("print(1)", code.code)
+        assertEquals(null, parseMarkdownBlocks("```\nls\n```").filterIsInstance<MarkdownBlock.CodeBlock>().single().language)
+        assertEquals("zsh", parseMarkdownBlocks("  ````zsh\nls\n````").filterIsInstance<MarkdownBlock.CodeBlock>().single().language)
+    }
+
+    @Test
+    fun `AI へ渡す Markdown にはコードの言語を入れない`() {
+        // 言語の札は描く側だけが使う（→ features/note_typesetting.md §5.4）。AI の入力は今と同じ形のまま。
+        val blocks = parseMarkdownBlocks("```kotlin\nval x = 1\n```")
+        assertEquals("```\nval x = 1\n```", blocksToMarkdown(blocks))
+    }
+
+    @Test
     fun `CRLF改行のノートもパースできる`() {
         val blocks = parseMarkdownBlocks("# 見出し\r\n本文")
         assertEquals(MarkdownBlock.Heading(1, "見出し"), blocks[0])

@@ -231,9 +231,10 @@ private fun LazyListScope.titleResults(
             MessagePanel { LoadingRow("ノートの一覧を読んでいます…") }
         }
         TitleBody.Failed -> item(key = "title-message") {
-            val message = (uiState.titleSearch as? TitleSearchState.Error)?.message.orEmpty()
+            // 失敗の文は FailureScene.NoteList が決める。例外の文を後ろへ足さない。
+            val message = (uiState.titleSearch as? TitleSearchState.Error)?.message ?: "ノートの一覧を読めませんでした。"
             MessagePanel {
-                Text("ノートの一覧を読めませんでした: $message", fontSize = 13.sp, color = ErrorText)
+                Text(message, fontSize = 13.sp, color = ErrorText)
             }
         }
         TitleBody.NoMatch -> item(key = "title-message") {
@@ -344,13 +345,22 @@ private fun ScopeChips(uiState: NoteUiState, onSelectFolder: (NoteFolder?) -> Un
             }
         }
         if (uiState.selectedFolder == null) {
-            // エラーではないが赤文字で出す（→ ai_picker 判断1）。
-            ScopeNote("タイトルが近い40本から選びます。意味で探したいときはフォルダを選んでください。", color = ErrorText)
+            // 既定の状態で出る注記なので、失敗の色を使わずに静かに出す（→ ai_picker 判断1・system/ui_copy.md §5）。
+            ScopeNote(SEARCH_ALL_SCOPE_NOTE)
         }
         // フォルダ列挙に失敗しても「すべて」では検索できる。操作を止めない注記に留める。
         uiState.foldersError?.let { ScopeNote(it) }
     }
 }
+
+/** 範囲が「すべて」のときの注記。フォルダを選ぶと候補の絞り方が変わることだけを言い、内部の本数は出さない。 */
+internal const val SEARCH_ALL_SCOPE_NOTE = "フォルダを選ぶと、中身まで深く探せます"
+
+/** 結果の空の場。いくつ出るかは言わない。 */
+internal const val SEARCH_IDLE_TEXT = "ことばを入れると、近いノートが出ます"
+
+/** AI が選ばなかったときの断り書き。**理由は言わない**（→ features/ai_picker.md 判断1）。 */
+internal const val SEARCH_KEYWORD_NOTICE = "ことばの一致で出しています"
 
 /** グラデーション直上に文字を置かない。注記も面を持たせる。 */
 @Composable
@@ -436,7 +446,7 @@ private fun SearchResultPanel(
         Column(modifier = Modifier.padding(12.dp)) {
             when (state) {
                 is SearchState.Idle -> Text(
-                    "ことばを入れてさがすと、ここに3件出ます。",
+                    SEARCH_IDLE_TEXT,
                     fontSize = 13.sp,
                     color = OnSurfaceFaint
                 )
@@ -448,7 +458,7 @@ private fun SearchResultPanel(
                     // AIを使わずに探した事実が消える。
                     if (!state.isAiAssisted) {
                         Text(
-                            "キーワード一致で表示しています。",
+                            SEARCH_KEYWORD_NOTICE,
                             fontSize = 12.sp,
                             color = OnSurfaceFaint
                         )
@@ -469,8 +479,9 @@ private fun SearchResultPanel(
                         }
                     }
                 }
+                // 失敗の文は FailureScene が決める。前置きを足すと「さがせませんでした」と二重になる。
                 is SearchState.Error -> Text(
-                    "検索に失敗しました: ${state.message}",
+                    state.message,
                     fontSize = 13.sp,
                     color = ErrorText
                 )

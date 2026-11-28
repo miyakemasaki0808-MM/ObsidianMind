@@ -182,12 +182,7 @@ internal fun RebuttalPanel(
  */
 @Composable
 internal fun RebuttalSentenceBody(sentence: RebuttalSentence, onOpenSource: (RelatedNote) -> Unit) {
-    Text(
-        text = "いま読んでいるノートと食い違う、別のノートの一文",
-        fontSize = 11.sp,
-        color = OnSurfaceFaint
-    )
-    Spacer(modifier = Modifier.height(8.dp))
+    // 見出しの下に定義の文を添えない（→ system/ui_copy.md §2 の2）。何の一文かは見出しと出どころの行が言う。
     Text(
         text = sentence.text,
         fontSize = 14.sp,

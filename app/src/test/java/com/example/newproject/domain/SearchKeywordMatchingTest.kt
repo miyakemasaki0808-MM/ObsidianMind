@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// さがすタブのキーワード一致。フォールバックが画面文言「キーワード一致で表示しています」と
+// さがすタブのキーワード一致。フォールバックが画面文言「ことばの一致で出しています」と
 // 一致していることを担保する（以前は SAF の列挙順の先頭3件を返していた）。
 class SearchKeywordMatchingTest {
 

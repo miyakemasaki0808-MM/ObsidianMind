@@ -57,7 +57,7 @@ internal class SummaryRowInputs(
 /**
  * 面の中の部分要約の行（→ features/margin_pane.md §5.2 の4）。**持っている節ならその要約、無ければ「この節を要約」。**
  *
- * 生成中は「生成を中止」だけを添える。取り消すとボタンに戻る。出せなかったときは理由と再試行を出す。
+ * 生成中は「生成を止める」だけを添える。取り消すとボタンに戻る。出せなかったときは理由と再試行を出す。
  * 面を閉じても要約は消えないので、終了のボタンは置かない。全節の間は、番を待つ節に「次に作ります」を出し、
  * 中止の口を「全節の生成を止める」1つにする。
  */
@@ -91,7 +91,7 @@ internal fun SectionSummaryRow(inputs: SummaryRowInputs, modifier: Modifier = Mo
                     TextButton(
                         onClick = inputs.onCancel,
                         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
-                    ) { Text("生成を中止", color = OnSurfaceMuted, fontSize = 12.sp) }
+                    ) { Text("生成を止める", color = OnSurfaceMuted, fontSize = 12.sp) }
                 }
             }
 

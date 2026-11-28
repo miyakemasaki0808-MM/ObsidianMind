@@ -1,5 +1,7 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.ui.markdown.MarkdownBodyStyle
+
 /**
  * ノート画面の並べ方（→ features/rediscover.md 判断6・features/margin_pane.md §5.1）。
  *
@@ -121,7 +123,8 @@ private fun spreadPagesFor(widthDp: Float, heightDp: Float, fold: ReaderFold?, r
         pageStartDp = left - page,
         pageWidthDp = page,
         gutterDp = gutter,
-        textWidthDp = right - SPREAD_PAGE_PADDING_DP * 2,
+        // 本文の列の最大幅は縦の流しと同じ。ページの組み（NoteSpread）も同じ上限で測る。
+        textWidthDp = minOf(right - SPREAD_PAGE_PADDING_DP * 2, MarkdownBodyStyle.ColumnMaxWidth.value),
         textHeightDp = heightDp - SPREAD_STRIP_DP - SPREAD_PAGE_PADDING_DP * 2
     )
 }

@@ -200,7 +200,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 
 | 外に出ているもの | 理由 |
 |---|---|
-| 設定（`darkTheme`・`notePaperAging`） | 状態22項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
+| 設定（`darkTheme`・`notePaperAging`・`vividReadingGround`） | 状態22項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
 | `NoteSectionModel` | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
 | 並べ読みの本文の解析結果（`SideReadingController.blocks`） | `NoteSectionModel` と同じく `domain.markdown` の型を持つ（**パッケージ境界**）。読み込み中・読めた・失敗の状態は `NoteUiState` に置き、`withNoteScopedReset()` で落とす。本文はそれと一緒に `cancelNoteScopedJobs()` が消す（→ [margin_pane](../features/margin_pane.md) §6） |
 | Explore の打った言葉（`ComposeExploreQuery`） | 余白メモの書きかけと同じ理由（**IME**）。範囲と結果はタブを離れても残るので、言葉もタブの外に置いて揃えて残す。ViewModel が持ち、`SearchController` は `ExploreQueryStore` の口だけを通して、開き直しで読み、Vault 切替で捨てる（→ [ai_picker](../features/ai_picker.md) §6） |

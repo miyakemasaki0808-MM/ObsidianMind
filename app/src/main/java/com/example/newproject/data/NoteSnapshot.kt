@@ -25,7 +25,7 @@ internal class NoteFileTooLargeException(
 ) : IllegalArgumentException("ノートが蒸留の上限 ${maximumBytes} bytes を超えています。")
 
 internal class InvalidNoteEncodingException(cause: CharacterCodingException) :
-    IllegalArgumentException("ノートをUTF-8として厳密に読み取れません。", cause)
+    IllegalArgumentException("ノートの文字を確かめられません。", cause)
 
 internal fun readBoundedBytes(
     input: InputStream,

@@ -55,6 +55,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -77,14 +78,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.ArrangedMemos
 import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.domain.MemoSendAction
-import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
 import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
@@ -514,7 +519,7 @@ internal fun MarginMemoSheetContent(
             // **合図であって壁ではない。** 超えても切らないし、置けなくもならない。
             if (isMemoOverSoftLimit(draft.text)) {
                 Text(
-                    text = "少し長めです（${SOFT_MEMO_CHARS}字をめやすに）。このまま置けます。",
+                    text = "少し長めです。このまま置けます。",
                     color = OnSurfaceMuted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 4.dp)
@@ -578,7 +583,7 @@ internal fun MarginMemoSheetContent(
                 )
 
                 is MarginMemoState.Error -> Text(
-                    text = "前のメモを読めませんでした。\n${state.message}",
+                    text = state.message,
                     color = OnSurfaceMuted,
                     fontSize = 12.sp
                 )
@@ -637,10 +642,10 @@ internal fun MarginMemoSheetContent(
                 TextButton(onClick = {
                     onDelete(target)
                     pendingDelete = null
-                }) { Text("消す", color = DangerAction) }
+                }) { Text("削除", color = DangerAction) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("やめる") }
+                TextButton(onClick = { pendingDelete = null }) { Text("キャンセル") }
             }
         )
     }
@@ -773,35 +778,40 @@ private fun PaneRebuttal(sentence: RebuttalSentence, onOpen: (RelatedNote) -> Un
 }
 
 /**
- * 書き込み先の知らせか、使い方の1行。**1行に収め、高さを変えない。**
+ * 書き込み先の知らせか、安全の1行。**どちらでも高さを変えない**（[writeTargetLineHeight] が文字の倍率に合わせて2行分を取る）。
+ * 安全の1行は折り返してよく、末尾で切らない。
  *
  * 書き込み先は書き始めた節で、本文を先へ進めても動かない（→ features/margin_pane.md §5.3）。
  * 「本文を戻す」でその節へ本文を送る。
  */
 @Composable
-private fun WriteTargetLine(
+internal fun WriteTargetLine(
     notice: SectionRef?,
     hasHeadings: Boolean,
     onJumpToSection: (SectionRef) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 2行分の高さは、描く字と同じ書式で測る。大きい倍率では行の高さを文字の大きさとの比で解くので、sp を換算しても合わない。
+    val style = LocalTextStyle.current.merge(WRITE_TARGET_TEXT_STYLE)
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val twoLinesPx = remember(style, density) { measurer.measure(AnnotatedString("あ\nあ"), style, density = density).size.height }
     Row(
-        modifier = modifier.fillMaxWidth().height(WRITE_TARGET_LINE_HEIGHT),
+        modifier = modifier.fillMaxWidth().height(writeTargetLineHeight(twoLinesPx, density)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (notice == null) {
             Text(
-                text = "思いついたことを短く。ノート本体は変わりません。",
+                text = MEMO_INPUT_HINT,
                 color = OnSurfaceFaint,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = style,
+                maxLines = 2
             )
         } else {
             Text(
                 text = "「${sectionLabel(notice, hasHeadings)}」へ書き込み中",
                 color = AccentText,
-                fontSize = 12.sp,
+                style = style,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
@@ -817,6 +827,18 @@ private fun WriteTargetLine(
 
 /** 書き込み先の1行の高さ。**知らせの有無で変えない**（入力欄を動かさないため）。 */
 private val WRITE_TARGET_LINE_HEIGHT = 32.dp
+/** 入力欄の上の行の字。安全の1行と書き込み先の知らせが同じ書式で組み、行の高さの予約もこれで測る。 */
+private val WRITE_TARGET_TEXT_STYLE = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
+
+/** 入力欄の上の安全の1行。ノート本体が変わらないことだけを言う（→ system/ui_copy.md §2 の2・5）。 */
+internal const val MEMO_INPUT_HINT = "ノート本体は変わりません"
+
+/**
+ * 入力欄の上の行の高さ。書き込み先の知らせと安全の1行が出入りしても入力欄が動かないように、**描く字の2行分**（[twoLinesPx]、
+ * 同じ書式で測った高さ）を取り、32dp を下回らない。大きい文字でも安全の1行が末尾で切れずに折り返せる。
+ */
+internal fun writeTargetLineHeight(twoLinesPx: Int, density: Density): Dp =
+    maxOf(WRITE_TARGET_LINE_HEIGHT, with(density) { twoLinesPx.toDp() })
 
 /**
  * 前回の読書の跡（→ features/margin_pane.md §5.7）。**知らせるだけで、押せない。**
@@ -855,11 +877,11 @@ private fun StatusText(state: MarginMemoState) {
     val text = when (ready.status) {
         MemoSaveStatus.None -> if (ready.wasTruncated) "長すぎたので、ここまでを置きました" else ""
         MemoSaveStatus.Saving -> "置いています…"
-        MemoSaveStatus.Held -> "このノートを離れるときに保存します"
+        MemoSaveStatus.Held -> "離れるときに置きます"
         MemoSaveStatus.Saved -> if (ready.wasTruncated) "長すぎたので、ここまでを置きました" else "置きました"
         // **入力は消えていない**ことまで言う。消えたと思わせない。
         MemoSaveStatus.Full -> "このノートのメモがいっぱいです。1件消すと置けます"
-        MemoSaveStatus.Failed -> "置けませんでした。もう一度お試しください"
+        MemoSaveStatus.Failed -> "置けませんでした"
         // **未保存と断定しない。** 読めないだけで、置けている場合がある。
         MemoSaveStatus.Unconfirmed -> "保存を確認できません"
     }
@@ -1063,7 +1085,7 @@ internal fun memoInputPlaceholder(draft: MarginMemoDraft): String =
 internal const val DRAFT_QUOTE_DESTINATION = "今のノートの余白へ · まだ置いていません"
 
 /** 引用の結果を待っている間の知らせ。届くまで置けないことを示す（→ features/margin_quote.md §5.3）。 */
-internal const val DRAFT_QUOTE_PENDING = "引用を付けています（付くまで置けません）"
+internal const val DRAFT_QUOTE_PENDING = "引用を付けています…"
 
 /** 上限で入らなかった部分の知らせ（→ features/margin_quote.md §5.2）。切れる部分は続けて薄く添える。 */
 internal const val DRAFT_QUOTE_CUT_NOTICE = "ここから先は入りません"

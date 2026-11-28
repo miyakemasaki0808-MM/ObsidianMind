@@ -124,9 +124,10 @@ class BearingChannelTest {
     /** 本文パネルが「読む面」の役割を通ること。**同じく代入で見る。** */
     @Test
     fun `本文パネルは読む面の役割を引く`() {
+        // 全画面の紙は角を持たない（→ features/note_typesetting.md §5.1）ので、形は浮かせるときだけ読む面の役割から引く。
         assertTrue(
-            "本文パネルが `shape = ReadingSurfaceShape` を代入していません。",
-            notePanelBody.contains("shape = ReadingSurfaceShape")
+            "本文パネルの `shape =` が読む面の役割（ReadingSurfaceShape）を引いていません。",
+            Regex("""shape = [^\n]*ReadingSurfaceShape""").containsMatchIn(notePanelBody)
         )
     }
 

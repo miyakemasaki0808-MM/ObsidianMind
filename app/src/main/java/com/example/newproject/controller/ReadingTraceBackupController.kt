@@ -1,5 +1,9 @@
 package com.example.newproject.controller
 
+import com.example.newproject.data.ReadingTraceBackupTooLargeException
+import com.example.newproject.data.ReadingTraceBackupLimit
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.data.ReadingTraceBackupEntry
 import com.example.newproject.data.ReadingTraceBackupJson
 import com.example.newproject.data.ReadingTraceBackupReadResult
@@ -206,7 +210,7 @@ internal class ReadingTraceBackupController(
             // **列挙できなかったを「痕跡ゼロ」へ畳まない。** 畳むと空の退避ファイルを
             // 書き出し、それを信じて端末を移した時点で全部失われる。
             is ReadingTraceKeyListing.Unavailable ->
-                ReadingTraceBackupState.Error(listing.reason)
+                ReadingTraceBackupState.Error(FailureScene.TraceListing.text)
 
             is ReadingTraceKeyListing.Available -> {
                 val keys = listing.keys.sorted()
@@ -222,7 +226,7 @@ internal class ReadingTraceBackupController(
         // `state.set` は suspend しないのでキャンセル後も書き込まれてしまう。
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(error.message ?: "読書痕跡を書き出せませんでした。")
+        ReadingTraceBackupState.Error(backupLimitText(error) ?: failureText(error, FailureScene.TraceExport))
     }
 
     private suspend fun exportKeys(
@@ -379,7 +383,7 @@ internal class ReadingTraceBackupController(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(error.message ?: "退避ファイルを読み取れませんでした。")
+        ReadingTraceBackupState.Error(backupLimitText(error) ?: failureText(error, FailureScene.TraceBackupRead))
     }
 
     /**
@@ -436,7 +440,7 @@ internal class ReadingTraceBackupController(
 
         val existingKeys = existingKeys(vaultKey)
             ?: return ReadingTraceBackupState.Error(
-                "端末側の読書痕跡を確認できませんでした。同期の完了を待ってからお試しください。"
+                "端末側の読書痕跡を確かめられませんでした。同期が終わったら試せます。"
             )
         val snapshots =
             readLocals(traces, vaultKey, existingKeys, generation, ReadingTraceBackupStep.IMPORT_SCAN)
@@ -470,7 +474,7 @@ internal class ReadingTraceBackupController(
         if (state.current !is ReadingTraceBackupState.Planned) return
         val target = pending ?: return
         if (target.vaultKey != currentVaultKey()) {
-            state.set(ReadingTraceBackupState.Error("Vault が切り替わりました。選び直してください。"))
+            state.set(ReadingTraceBackupState.Error("Vault が替わりました。ファイルを選び直せます。"))
             pending = null
             return
         }
@@ -494,7 +498,7 @@ internal class ReadingTraceBackupController(
         val existingKeys = existingKeys(target.vaultKey)
         if (existingKeys == null) {
             ReadingTraceBackupState.Error(
-                "端末側の読書痕跡を確認できませんでした。同期の完了を待ってからお試しください。"
+                "端末側の読書痕跡を確かめられませんでした。同期が終わったら試せます。"
             )
         } else {
             val fresh = readLocals(
@@ -531,7 +535,7 @@ internal class ReadingTraceBackupController(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(error.message ?: "読書痕跡を読み戻せませんでした。")
+        ReadingTraceBackupState.Error(failureText(error, FailureScene.TraceImport))
     }
 
     /** ── 段階2: 書く。1件ずつ錠の中で読み直し、承認された状態のままのものだけ書く。 ── */
@@ -707,4 +711,15 @@ internal class ReadingTraceBackupController(
          */
         const val IO_CHUNK_SIZE = 25
     }
+}
+
+/**
+ * 退避の上限を超えたときの文。**やり直しても直らないので、一般の失敗と分けて言う**（→ features/reading_trace_backup.md §5）。
+ * 上限の数は出さない（→ system/ui_copy.md §2 の3）。上限超過でなければ null。
+ */
+internal fun backupLimitText(error: Throwable): String? = when ((error as? ReadingTraceBackupTooLargeException)?.limit) {
+    ReadingTraceBackupLimit.TOO_MANY_TRACES -> "痕跡が多すぎて、書き出せません。"
+    ReadingTraceBackupLimit.EXPORT_TOO_LARGE -> "痕跡が大きすぎて、書き出せません。"
+    ReadingTraceBackupLimit.IMPORT_TOO_LARGE -> "退避ファイルが大きすぎて、読み戻せません。"
+    null -> null
 }

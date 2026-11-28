@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
 import com.example.newproject.controller.ReadingTraceCleanupController
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTraceKeyListing
@@ -72,7 +73,21 @@ class ReadingTraceCleanupControllerTest {
         env.controller.assess()
         advanceUntilIdle()
 
-        assertTrue(env.state.value is ReadingTraceCleanupState.Error)
+        assertEquals(ReadingTraceCleanupState.Error(FailureScene.TraceListing.text), env.state.value)
+    }
+
+    /** 一覧を読むときに例外が出ても、例外の文を画面へ出さず、候補ゼロにしない。 */
+    @Test
+    fun `一覧を読むときの例外の文を画面へ出さない`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/habit.md"))
+        env.persistence.listingThrows = true
+
+        env.controller.assess()
+        advanceUntilIdle()
+
+        val error = env.state.value as ReadingTraceCleanupState.Error
+        assertTrue(error.message, !error.message.contains("EACCES"))
     }
 
     @Test
@@ -572,6 +587,7 @@ private class FakeCleanupPersistence(
     private val traces = mutableMapOf<String, ReadingTrace>()
     val corruptKeys = mutableSetOf<String>()
     var listingUnavailable = false
+    var listingThrows = false
     var loadByKeyCount = 0
         private set
 
@@ -590,7 +606,9 @@ private class FakeCleanupPersistence(
     }
 
     override fun listKeys(vaultKey: String): ReadingTraceKeyListing = when {
-        listingUnavailable -> ReadingTraceKeyListing.Unavailable("読み取れませんでした")
+        // データの層は例外の文を理由に入れて返しうる。画面へは出さない。
+        listingUnavailable -> ReadingTraceKeyListing.Unavailable("EACCES raw-provider-error")
+        listingThrows -> throw java.io.IOException("EACCES raw-provider-error")
         vaultKey != VAULT -> ReadingTraceKeyListing.Unavailable("Vault が違います")
         else -> ReadingTraceKeyListing.Available(traces.keys.toSet())
     }

@@ -66,7 +66,7 @@ internal fun sideLinkActionFor(resolution: NoteLinkResolution, currentNote: Docu
 
 private fun noteLinkMissingText(label: String): String = "「$label」は見つかりませんでした"
 
-private const val NOTE_LINK_NOT_READY_TEXT = "ノートの一覧を読み込んでいます。少ししてからもう一度押してください"
+private const val NOTE_LINK_NOT_READY_TEXT = "ノートの一覧を読み込んでいます。少しすると開けます"
 
 /**
  * 見出しが見つからなかったときの知らせ。[opened] は別のノートを開いたか — 開いたなら先頭から始めたことも伝える。

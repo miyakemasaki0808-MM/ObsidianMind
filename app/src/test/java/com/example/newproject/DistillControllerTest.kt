@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.controller.resolvedButUndeletableMessage
 import com.example.newproject.controller.DistillController
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryAssessment
@@ -685,6 +686,49 @@ class DistillControllerTest {
         assertTrue(state.value.distillState is DistillState.Idle)
     }
 
+    /** 控えを消せなかったときの文は、書き込む前に止まったのか、保存を終えていたのかで分ける。起動時の確認の経路。 */
+    @Test
+    fun `控えを消せなかったとき、書き込む前に止まった保存を保存できたと言わない`() = runTest {
+        val cases = listOf(
+            DistillRecoveryAssessment.OriginalStillPresent(record()) to false,
+            DistillRecoveryAssessment.ExpectedOutputPresent(record()) to true
+        )
+        cases.forEach { (assessment, saved) ->
+            val state = stateWithNote()
+            val persistence = FakePersistence().apply {
+                this.assessment = assessment
+                discardResolvedSucceeds = false
+            }
+            val controller = controller(state, FakeAiClient.returning("S001"), persistence)
+
+            controller.checkRecovery()
+            advanceUntilIdle()
+
+            val message = (state.value.distillState as DistillState.RecoveryRequired).message
+            assertEquals(resolvedButUndeletableMessage(saved), message)
+            assertEquals("$assessment: $message", saved, message.contains("できていました"))
+            assertTrue("$assessment: $message", !saved == message.contains("元のまま"))
+        }
+    }
+
+    /** 復元の操作の後の経路（失敗した復元から判定を出し直す）でも同じに分ける。 */
+    @Test
+    fun `復元に失敗した後の判定でも、書き込む前に止まった保存を保存できたと言わない`() = runTest {
+        val state = stateWithNote()
+        val persistence = FakePersistence().apply {
+            assessment = DistillRecoveryAssessment.OriginalStillPresent(record())
+            discardResolvedSucceeds = false
+            restoreResult = DistillRecoveryResolutionResult.Failure("戻せませんでした")
+        }
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
+
+        controller.restoreOriginal()
+        advanceUntilIdle()
+
+        val message = (state.value.distillState as DistillState.RecoveryRequired).message
+        assertEquals(resolvedButUndeletableMessage(saved = false), message)
+    }
+
     /**
      * 2-7 の本体。復旧確認はSAF I/Oを伴うので遅れることがあり、その間にユーザーが
      * 蒸留を始められる。復旧警告を出した時点で走行中の分析を無効化しないと、
@@ -1220,6 +1264,7 @@ class DistillControllerTest {
         var pending: PendingDistillOriginal? = null
         var discarded = false
         var discardedResolved = false
+        var discardResolvedSucceeds = true
         var restoreResult: DistillRecoveryResolutionResult = DistillRecoveryResolutionResult.NoValidRecord
         var writeResult: (DistillWriteRequest) -> DistillWriteResult = { request ->
             DistillWriteResult.Success(sha256Hex(request.outputBytes), request.outputBytes.size)
@@ -1235,7 +1280,7 @@ class DistillControllerTest {
         }
         override fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean {
             discardedResolved = true
-            return true
+            return discardResolvedSucceeds
         }
         override fun discardPendingRecovery(): Boolean {
             discarded = true

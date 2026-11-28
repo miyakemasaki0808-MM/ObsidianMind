@@ -132,14 +132,14 @@ internal class DistillWriteRepository(
         if (!HASH_PATTERN.matches(request.baselineHash)) {
             return DistillWriteResult.Failure(
                 DistillWriteFailureStage.VALIDATION,
-                "基準ハッシュが不正です。",
+                "保存前の確認ができませんでした。",
                 recoveryRequired = false
             )
         }
         if (request.targetUri.isBlank()) {
             return DistillWriteResult.Failure(
                 DistillWriteFailureStage.VALIDATION,
-                "対象URIが空です。",
+                "ノートを開けません。",
                 recoveryRequired = false
             )
         }
@@ -159,13 +159,13 @@ internal class DistillWriteRepository(
         } catch (error: Exception) {
             return DistillWriteResult.Failure(
                 DistillWriteFailureStage.PRE_WRITE_CHECK,
-                error.message ?: "保存前のノートを読み取れませんでした。",
+                "保存前のノートを読み取れませんでした。",
                 recoveryRequired = false
             )
         }
         val initialHash = sha256Hex(initialBytes)
         if (initialHash != request.baselineHash) {
-            return DistillWriteResult.Conflict(initialHash, "ノートが外部で変更されています。再解析してください。")
+            return DistillWriteResult.Conflict(initialHash, "ノートが外で書き換えられました。")
         }
         // 書くのは BOM を戻したこのバイト列。サイズ・期待ハッシュ・復旧の記録もこちらで取る
         // （本文のバイト列で取ると、書いた後の検証と再読込の照合が必ず外れる）。
@@ -183,7 +183,7 @@ internal class DistillWriteRepository(
             }
         } catch (error: Exception) {
             return DistillWriteResult.StorageUnavailable(
-                error.message ?: "内部ストレージの空き容量を確認できません。"
+                "端末の空きを確かめられませんでした。"
             )
         }
         if (availableBytes <= 0L) {
@@ -196,7 +196,7 @@ internal class DistillWriteRepository(
         if (!cacheDirectory.exists() && !cacheDirectory.mkdirs()) {
             return DistillWriteResult.Failure(
                 DistillWriteFailureStage.STAGING,
-                "蒸留キャッシュ用ディレクトリを作成できません。",
+                "保存の準備ができませんでした。",
                 recoveryRequired = false
             )
         }
@@ -210,7 +210,7 @@ internal class DistillWriteRepository(
             if (sha256Hex(stageFile.readBytes()) != expectedHash) {
                 return DistillWriteResult.Failure(
                     DistillWriteFailureStage.STAGING,
-                    "蒸留キャッシュの検証に失敗しました。",
+                    "保存前の確認ができませんでした。",
                     recoveryRequired = false
                 )
             }
@@ -234,12 +234,12 @@ internal class DistillWriteRepository(
                 if (!recoveryStore.delete()) {
                     return DistillWriteResult.Failure(
                         DistillWriteFailureStage.CLEANUP,
-                        "競合を検知しましたが、準備済み復旧レコードを削除できませんでした。",
+                        "ノートが外で書き換えられましたが、保存前の本文を消せませんでした。",
                         recoveryRequired = true
                     )
                 }
                 recordCreated = false
-                return DistillWriteResult.Conflict(finalHash, "保存直前にノートが変更されました。再解析してください。")
+                return DistillWriteResult.Conflict(finalHash, "保存の直前にノートが書き換えられました。")
             }
 
             failureStage = DistillWriteFailureStage.RECOVERY_RECORD
@@ -268,7 +268,7 @@ internal class DistillWriteRepository(
             if (!recoveryStore.delete()) {
                 return DistillWriteResult.Failure(
                     DistillWriteFailureStage.CLEANUP,
-                    "書き込みは完了しましたが、復旧レコードを削除できませんでした。",
+                    "保存はできましたが、保存前の本文を消せませんでした。",
                     recoveryRequired = true,
                     documentMayHaveChanged = true
                 )
@@ -279,7 +279,7 @@ internal class DistillWriteRepository(
             val recoveryRequired = documentWriteStarted || (recordCreated && !recoveryStore.delete())
             return DistillWriteResult.Failure(
                 stage = failureStage,
-                message = error.message ?: "蒸留の保存に失敗しました。",
+                message = "蒸留を保存できませんでした。",
                 recoveryRequired = recoveryRequired,
                 documentMayHaveChanged = documentWriteStarted
             )
@@ -304,7 +304,7 @@ internal class DistillWriteRepository(
             } catch (error: Exception) {
                 DistillRecoveryAssessment.Inaccessible(
                     record,
-                    error.message ?: "対象ノートへアクセスできません。"
+                    "元のノートを開けません。"
                 )
             }
         }
@@ -329,14 +329,14 @@ internal class DistillWriteRepository(
         val record = (recoveryStore.read() as? DistillRecoveryReadResult.Valid)?.record
             ?: return DistillRecoveryResolutionResult.NoValidRecord
         if (!cacheDirectory.exists() && !cacheDirectory.mkdirs()) {
-            return DistillRecoveryResolutionResult.Failure("復元用キャッシュを作成できません。")
+            return DistillRecoveryResolutionResult.Failure("復元の準備ができませんでした。")
         }
         val stageFile = File(cacheDirectory, "$CACHE_PREFIX${UUID.randomUUID()}-restore.tmp")
         var writeStarted = false
         return try {
             writeStageFile(stageFile, record.originalBytes)
             if (sha256Hex(stageFile.readBytes()) != record.originalHash) {
-                DistillRecoveryResolutionResult.Failure("復元データの検証に失敗しました。")
+                DistillRecoveryResolutionResult.Failure("保存前の本文を確かめられませんでした。")
             } else {
                 writeStarted = true
                 gateway.writeFromFile(record.targetUri, stageFile)
@@ -345,7 +345,7 @@ internal class DistillWriteRepository(
                     DistillRecoveryResolutionResult.Failure("復元後のノートを検証できませんでした。", touchedTargetUri = record.targetUri)
                 } else if (!recoveryStore.delete()) {
                     DistillRecoveryResolutionResult.Failure(
-                        "復元は完了しましたが、復旧レコードを削除できませんでした。",
+                        "復元はできましたが、保存前の本文を消せませんでした。",
                         touchedTargetUri = record.targetUri
                     )
                 } else {
@@ -354,7 +354,7 @@ internal class DistillWriteRepository(
             }
         } catch (error: Exception) {
             DistillRecoveryResolutionResult.Failure(
-                error.message ?: "元本文へ復元できませんでした。",
+                "保存前の本文へ戻せませんでした。",
                 touchedTargetUri = record.targetUri.takeIf { writeStarted }
             )
         } finally {

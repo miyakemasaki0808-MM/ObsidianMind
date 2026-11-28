@@ -91,12 +91,12 @@ class SearchPickerUseCase(
             // 区別できず、追い越された古い要求がエラー表示になる。素通しする。
             throw e
         } catch (e: Exception) {
-            PickerResult.Error(e.message ?: "Unknown error")
+            PickerResult.Error(failureText(e, FailureScene.Search))
         }
     }
 
     // AI が使えない、または IDが1件も取れなかったときは、キーワード一致の強い順に返す。
-    // 画面は「キーワード一致で表示しています。」と言うので、候補数に関係なくスコア順に並べ、
+    // 画面は「ことばの一致で出しています」と言うので、候補数に関係なくスコア順に並べ、
     // 一致0件は返さない（0件なら画面は「見つかりませんでした。」になる）。
     private fun fallback(
         query: String,

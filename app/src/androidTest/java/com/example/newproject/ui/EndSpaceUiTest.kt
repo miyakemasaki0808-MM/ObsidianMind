@@ -44,6 +44,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
@@ -311,6 +312,21 @@ class EndSpaceUiTest {
             fullscreen = false
         }
         assertAtHeading(position.listState)
+        // 全画面で足した余白を運ばず、通常の窓で要る分に測り直す（→ features/note_typesetting.md 判断12）。
+        // 運んだままだと、末尾へ送ったとき本文の見える範囲が余白だけになる。
+        assertSpaceFitsWindow(position.listState, position.endSpace)
+    }
+
+    /** 見出しを上端に置いたままの余白が、最後のブロックの下から窓の下端までの高さを超えない。 */
+    private fun assertSpaceFitsWindow(list: LazyListState, space: EndSpace) {
+        composeRule.waitForIdle()
+        composeRule.runOnIdle {
+            val layout = list.layoutInfo
+            val last = layout.visibleItemsInfo.last()
+            assertEquals("最後のブロックが窓の中に無い", layout.totalItemsCount - 1, last.index)
+            val free = layout.viewportSize.height - (last.offset + last.size)
+            assertTrue("余白 ${space.bottomPx}px が窓で要る分 ${free}px を超えている", space.bottomPx <= free + 1)
+        }
     }
 
     // ── 確かめ方 ──────────────────────────────────────────────────

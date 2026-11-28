@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.VaultHandle
 import com.example.newproject.domain.selectCoverLine
@@ -140,7 +142,7 @@ internal class BookletController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                BookletState.Failed(e.message ?: "冊子を作れませんでした。")
+                BookletState.Failed(failureText(e, FailureScene.Booklet))
             }
             if (isCurrent(drawBundleId, generation)) state.update { next }
         }
@@ -182,7 +184,7 @@ internal class BookletController(
                     state.update { current ->
                         if (current !is BookletState.Open) return@update current
                         // **束は1つも捨てない。** 前の引く束のまま、終端で理由と再試行を出す。
-                        current.copy(redrawError = e.message ?: "引き直せませんでした。")
+                        current.copy(redrawError = failureText(e, FailureScene.BookletRedraw))
                     }
                 }
                 return@launch

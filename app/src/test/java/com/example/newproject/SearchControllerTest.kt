@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SearchController
@@ -326,7 +327,7 @@ class SearchControllerTest {
 
         controller.onOpened { throw IllegalStateException("走査失敗") }
         controller.searchTitle("習慣")
-        assertEquals("走査失敗", (state.value.titleSearch as TitleSearchState.Error).message)
+        assertEquals(FailureScene.NoteList.text, (state.value.titleSearch as TitleSearchState.Error).message)
 
         controller.onOpened { listOf(notePath("習慣.md")) }
         controller.searchTitle("習慣")
@@ -594,7 +595,7 @@ class SearchControllerTest {
 
         controller(state, openVault()).searchByKeyword("習慣") { throw IllegalStateException("走査失敗") }
 
-        assertEquals("走査失敗", (state.value.searchState as SearchState.Error).message)
+        assertEquals(FailureScene.Search.text, (state.value.searchState as SearchState.Error).message)
     }
 
     /** 範囲は頼んだ時点のもの。頼んだ後にチップを替えた結果は、新しい範囲の Idle を上書きしない。 */

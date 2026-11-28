@@ -1,5 +1,6 @@
 package com.example.newproject.ui.component
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.semantics.Role
@@ -33,7 +34,8 @@ import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
-import com.example.newproject.ui.theme.PanelBlue
+import com.example.newproject.ui.theme.ReadingCard
+import com.example.newproject.ui.theme.ReadingPlateRim
 
 // ---------------------------------------------------------------------------
 // 「前回のあなた」再会カード。
@@ -60,10 +62,12 @@ internal fun ReadingTraceCardPanel(
     /** 前回並べた相手の名前を押したとき。null なら名前は押せない文字のまま（ペインを出せない窓 → features/desk_memory.md 判断3）。 */
     onOpenBeside: (() -> Unit)? = null
 ) {
+    // 読む画面の場に置く部品。ダークでは夜の紺の紙より1段明るい面と細い縁で、本文の紙と別のものに見せる（→ features/note_typesetting.md §5.6）。
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = PanelBlue,
-        shape = RoundedCornerShape(12.dp)
+        color = ReadingCard,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, ReadingPlateRim)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(
@@ -160,18 +164,15 @@ internal fun reunionLead(slot: ReunionSlot.Shown): String? = when (slot.kind) {
  */
 internal fun readingTraceHeadline(card: ReadingTraceCard, nowMillis: Long): String {
     val whenLabel = elapsedLabel(card.lastVisitAtMillis, nowMillis)
+    // いつと、どこまでだけを言う。回数と割合は1文に詰めない（→ system/ui_copy.md §2 の3・7）。
     val where = when {
-        isReadToEnd(card.lastProgressPercent) -> "最後まで読んでいます"
-        !card.lastSectionTitle.isNullOrBlank() ->
-            "「${card.lastSectionTitle}」の節まで読んでいます（全体の${card.lastProgressPercent}%）"
-        else -> "全体の${card.lastProgressPercent}%のあたりまで読んでいます"
+        isReadToEnd(card.lastProgressPercent) -> "最後まで読みました"
+        !card.lastSectionTitle.isNullOrBlank() -> "「${card.lastSectionTitle}」の節まで読みました"
+        else -> "途中まで読みました"
     }
-    // 「5日前に読んで」には助詞が要るが「今日読んで」には要らない。
-    // 相対表記だけが「前」で終わるので、そこで見分ける。
+    // 「5日前に、」には助詞が要るが「今日、」には要らない。相対表記だけが「前」で終わるので、そこで見分ける。
     val whenPhrase = if (whenLabel.endsWith("前")) "${whenLabel}に" else whenLabel
-    // 2回以上開いていれば回数を添える（俯瞰の入口になる）。
-    val times = if (card.visitCount >= 2) "これまで${card.visitCount}回開いています。" else ""
-    return "$times${whenPhrase}読んで、$where。"
+    return "$whenPhrase、$where。"
 }
 
 /** ざっくりした経過表示。「再会」の距離感が伝わればよいので粒度は粗くする。 */

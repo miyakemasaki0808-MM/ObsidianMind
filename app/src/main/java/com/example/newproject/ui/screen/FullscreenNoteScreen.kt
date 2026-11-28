@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -87,7 +86,7 @@ import kotlinx.coroutines.launch
  * 全画面のノート読書画面。
  * - 進入中はシステムバー（ナビ＋ステータス）を隠し、離脱時はナビバーのみ復元する
  *   （ステータスバーはアプリ全体仕様どおり隠したまま）。
- * - 背景はノートページ色で全ブリードし、本文カラムは最大720dpで中央寄せ。
+ * - 背景はノートページ色で全ブリードし、紙は浮かせない。本文の列は本文の紙と同じ最大幅（`MarkdownBodyStyle.ColumnMaxWidth`）で中央に置く。
  * - タブ側の [tabListState] から開始位置を継承し、離脱時に書き戻す。
  */
 @Composable
@@ -257,7 +256,6 @@ internal fun FullscreenNoteScreen(
                     uiState = uiState,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .widthIn(max = 720.dp)
                         .fillMaxSize()
                         .safeDrawingPadding(),
                     listState = listState,
@@ -266,7 +264,10 @@ internal fun FullscreenNoteScreen(
                     imageMeasurements = imageMeasurements,
                     onLink = openLink,
                     onQuote = quoteFromBody,
-                    endSpace = position.endSpace
+                    endSpace = position.endSpace,
+                    floating = false,
+                    // 今のノートの相対パスは、結晶の絞り込みと同じくノートを開いて確定した値を読む（ノート単位で消える）。
+                    tags = sectionModel?.tags.orEmpty()
                 )
                 IconPill(
                     symbol = "✕",

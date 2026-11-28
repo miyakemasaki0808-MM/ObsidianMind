@@ -229,6 +229,15 @@ class ReadingTraceBackupJsonTest {
         assertEquals(ReadingTraceBackupLimits.FORMAT_VERSION, root.getInt("backupVersion"))
         assertEquals(READING_TRACE_SCHEMA_VERSION, root.getInt("traceSchemaVersion"))
     }
+
+    /** 読み戻せない理由はそのまま画面に出るので、件数や上限の数を書かない（→ `docs/dev/system/ui_copy.md` §2 の3）。 */
+    @Test
+    fun `読み戻せない理由に数を書かない`() {
+        val source = java.io.File("src/main/java/com/example/newproject/data/ReadingTraceBackupJson.kt").readText()
+        val reasons = Regex("""Unusable\(\s*"([^"]*)"""").findAll(source).map { it.groupValues[1] }.toList()
+        assertTrue("理由が見つからない", reasons.isNotEmpty())
+        reasons.forEach { assertTrue(it, it.none { c -> c.isDigit() } && !it.contains('$')) }
+    }
 }
 
 private fun trace(path: String) = ReadingTrace(

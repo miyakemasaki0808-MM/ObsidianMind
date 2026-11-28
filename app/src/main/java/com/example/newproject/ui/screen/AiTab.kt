@@ -141,7 +141,7 @@ fun AiTab(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = "先に「ノート」タブでノートを表示してください。",
+                    text = "「ノート」タブでノートを開くと使えます。",
                     color = OnSurface,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(16.dp)
@@ -218,7 +218,7 @@ private fun DistillPanel(
             Text("✦ ノートを蒸留", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentText)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "AIが重要な箇所を選び、確認した箇所だけをノート内で太字にします。",
+                DISTILL_PANEL_LEAD,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 color = OnSurface
@@ -228,11 +228,11 @@ private fun DistillPanel(
             when (state) {
                 is DistillState.Idle -> {
                     if (noteUnavailableReason != null) {
-                        Text(noteUnavailableReason, fontSize = 13.sp, color = ErrorText)
+                        Text(noteUnavailableReason, fontSize = 13.sp, color = OnSurfaceMuted)
                     } else {
                         Button(
                             onClick = onStart,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi)
                         ) { Text("重要な箇所を見つける", color = OnButtonAi) }
                     }
@@ -275,14 +275,14 @@ private fun DistillPanel(
                     Text(
                         "選択 ${state.selectedCount}箇所・変更後の太字率 %.1f%%".format(ratioPercent),
                         fontSize = 12.sp,
-                        color = if (state.isWithinBoldLimit) OnSurface else ErrorText
+                        color = if (state.isWithinBoldLimit) OnSurface else OnSurfaceMuted
                     )
                     distillBoldNotice(state.isWithinBoldLimit, state.selectedCount)?.let { notice ->
-                        Text(notice, fontSize = 12.sp, lineHeight = 17.sp, color = ErrorText)
+                        Text(notice, fontSize = 12.sp, lineHeight = 17.sp, color = OnSurfaceMuted)
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("キャンセル") }
+                        OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("やめる") }
                         Button(
                             onClick = { showConfirmation = true },
                             enabled = state.canSaveSelection,
@@ -299,7 +299,7 @@ private fun DistillPanel(
                 is DistillState.Conflict -> {
                     Text(state.message, fontSize = 13.sp, color = ErrorText)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("最新の本文で再解析") }
+                    Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("最新の本文で選び直す") }
                 }
                 is DistillState.RecoveryRequired -> {
                     Text("復旧が必要です", fontWeight = FontWeight.Bold, color = ErrorText)
@@ -319,7 +319,7 @@ private fun DistillPanel(
                     }
                     if (state.canKeepCurrent) {
                         TextButton(onClick = { showKeepConfirmation = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (state.canRestore) "現在のファイルを維持" else "復旧情報を破棄")
+                            Text(if (state.canRestore) "現在のファイルを維持" else "保存前の本文を消す")
                         }
                     }
                 }
@@ -369,15 +369,12 @@ private fun DistillPanel(
                         Text(item.text, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = OnSurface)
                     }
                     if (!candidates.isWithinBoldLimit) {
-                        Text(
-                            "変更後の太字率は %.1f%% で、目安の30%%を超えます。"
-                                .format(candidates.projectedBoldRatio * 100.0),
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp,
-                            color = ErrorText
-                        )
+                        Text(DISTILL_CONFIRM_BOLD_HEAVY, fontSize = 12.sp, lineHeight = 17.sp, color = OnSurface)
                     }
-                    Text("元の文字は削除しません。この操作の取り消し機能はありません。", fontSize = 12.sp, color = ErrorText)
+                    // 起きることと、取り消せないことを別の行で言う（→ system/ui_copy.md §2 の6）。
+                    Text(DISTILL_CONFIRM_WHAT_HAPPENS, fontSize = 12.sp, color = OnSurface)
+                    // 取り消せないことは失敗ではないので赤にせず、太字の別の行で言う（→ system/ui_copy.md §2 の6・§5）。
+                    Text(DISTILL_CONFIRM_IRREVERSIBLE, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = OnSurface)
                 }
             },
             confirmButton = {
@@ -396,7 +393,7 @@ private fun DistillPanel(
         AlertDialog(
             onDismissRequest = { showRestoreConfirmation = false },
             title = { Text("保存前の本文へ復元しますか？") },
-            text = { Text("現在のファイル内容は保存前の本文で置き換わります。必要なら先に別ファイルへ書き出してください。") },
+            text = { Text("今のファイルが、保存前の本文に置き換わります。") },
             confirmButton = {
                 Button(onClick = {
                     showRestoreConfirmation = false
@@ -413,7 +410,12 @@ private fun DistillPanel(
         AlertDialog(
             onDismissRequest = { showKeepConfirmation = false },
             title = { Text("現在のファイルを維持しますか？") },
-            text = { Text("保存前の本文を保持している復旧情報を削除します。この操作後はアプリから復元できません。") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("保存前の本文を消します。")
+                    Text("この後は復元できません。", fontWeight = FontWeight.Bold, color = OnSurface)
+                }
+            },
             confirmButton = {
                 Button(onClick = {
                     showKeepConfirmation = false
@@ -469,7 +471,7 @@ private fun DistillCandidateRow(
                     Text(
                         "! 範囲が重なるため選択を外しました",
                         fontSize = 11.sp,
-                        color = ErrorText
+                        color = OnSurfaceMuted
                     )
                 }
             }
@@ -556,10 +558,22 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                     Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
                 }
                 is SummaryState.Error -> {
-                    Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorText)
+                    // 失敗の文は FailureScene が決める。前置きを足すと「うまく要約できませんでした」と二重になる。
+                    Text(summaryState.message, fontSize = 13.sp, color = ErrorText)
                 }
                 else -> {}
             }
         }
     }
 }
+
+/** 蒸留の面の1行（→ system/ui_copy.md §2 の2）。手順は部品に任せ、何をするかだけを言う。 */
+internal const val DISTILL_PANEL_LEAD = "要点を選んで、太字で残す"
+
+/** 確定の確認で、太字が目安を超えるとき。目安の数は出さない（→ system/ui_copy.md §2 の3）。 */
+internal const val DISTILL_CONFIRM_BOLD_HEAVY = "太字が多めになります。"
+
+/** 確定の確認で、起きること。取り消せないことは [DISTILL_CONFIRM_IRREVERSIBLE] として別の行に出す。 */
+internal const val DISTILL_CONFIRM_WHAT_HAPPENS = "文字は消えず、太字が加わります。"
+
+internal const val DISTILL_CONFIRM_IRREVERSIBLE = "取り消せません。"

@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
  * 角を丸めるのは、これがアプリのカードだからである。
  * 現在の利用者はノート本文パネル（通常表示・全画面で共用）。
  */
-internal val ReadingSurfaceShape: Shape = RoundedCornerShape(8.dp)
+internal val ReadingSurfaceShape: Shape = RoundedCornerShape(16.dp)
 
 /**
  * **眺める面。** 1枚で完結し、めくって次へ渡る面。

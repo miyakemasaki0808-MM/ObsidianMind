@@ -3263,7 +3263,6 @@ class NoteReadingFlowTest {
                 Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
                     NoteSpread(
                         noteKey = NOTE_A,
-                        title = TITLE,
                         sectionModel = remember { buildNoteSectionModel(SPREAD_BODY) },
                         position = remember { BodyPosition(LazyListState()) },
                         paperColor = Color.White,

@@ -26,6 +26,30 @@ internal val MutedIndigo = Color(0xFF6E63E3)
 internal val MutedAqua = Color(0xFF54B5D4)
 internal val MutedCoral = Color(0xFFE28D9F)
 
+/**
+ * 読む画面の場の1色。**色と強さを分けて持つ**ため、強さ（鮮やか／淡い）ごとの値を対で持つ（→ docs/dev/features/note_typesetting.md 判断17）。
+ * 淡い値は、鮮やかな値の色相を保ったまま OKLch で明度 0.94・彩度 0.025 にそろえたもの。実行時に色空間の計算は持ち込まず、規則で作った結果をここへ書く。
+ * **検査は値ではなく関係を見る**（淡い値が鮮やかな値より明るく、色相がずれないこと）→ `AppColorContrastTest`。
+ */
+internal class ReadingGroundColor(val vivid: Color, val pale: Color)
+
+/** ダークのノートを読む画面の場。3色の色相を残したまま夜の紺へ沈めたもの。紙（`#111A2E`）より暗い。 */
+internal val DarkReadingGround: List<Color> = listOf(Color(0xFF0D1230), Color(0xFF071426), Color(0xFF140F24))
+
+/** ライトの読む画面の場の3色（左下から右上へ流す順）。 */
+internal val DefaultReadingGround: List<ReadingGroundColor> = listOf(
+    ReadingGroundColor(vivid = MutedIndigo, pale = Color(0xFFE8E9FC)),
+    ReadingGroundColor(vivid = MutedAqua, pale = Color(0xFFDAEFF7)),
+    ReadingGroundColor(vivid = MutedCoral, pale = Color(0xFFFBE5E8))
+)
+
+// コードの色分けの色。コードの枠はテーマに関わらず暗い窓なので、明暗で値を替えない（→ docs/dev/features/note_typesetting.md §5.4）。
+// どれも2つの窓（ライト・ダーク）の上で 4.5:1 を超える → AppColorContrastTest。
+internal val CodeKeyword = Color(0xFFC3A6FF)
+internal val CodeString = Color(0xFFA6E3A1)
+internal val CodeComment = Color(0xFF7A86A0)
+internal val CodeNumber = Color(0xFFF5A97F)
+
 /** ライトのパネル色。見出しのヘイズがこの値から外れないよう、両方でここを引く。 */
 private val LightPanel = Color(0xFFFDFEFF)
 
@@ -164,6 +188,22 @@ internal val LightAppColors = AppColorScheme(
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFEAF7FF),
     linkText = Color(0xFF2563EB),
+    readingAccent = Color(0xFF6054DE),
+    readingPlateRim = Color.Transparent,
+    readingPlateLight = Color.Transparent,
+    readingCard = Color(0xFFF0F4FF),
+    readingChip = Color(0xFFF1F3F6),
+    readingBadge = Color(0xFFEBE9FC),
+    codeWindow = Color(0xFF0F1626),
+    onCodeWindow = Color(0xFFD7DEEA),
+    codeWindowLabel = Color(0xFF8E9AB0),
+    codeWindowRule = Color(0x14FFFFFF),
+    calloutFaces = CalloutFaceTones(
+        summary = CalloutFaceTone(surface = Color(0xFFEEF1F7), title = Color(0xFF4A5A78)),
+        question = CalloutFaceTone(surface = Color(0xFFF3F1FF), title = Color(0xFF6054DE)),
+        example = CalloutFaceTone(surface = Color(0xFFEAF5F2), title = Color(0xFF0C796C)),
+        caution = CalloutFaceTone(surface = Color(0xFFFBF3E2), title = Color(0xFF8A6414))
+    ),
     errorText = Color(0xFFCC0000),
     errorSurface = Color(0xFFCC0000),
     onErrorSurface = Color.White,      // #CC0000 上で 5.89
@@ -215,7 +255,9 @@ internal val LightAppColors = AppColorScheme(
     onGradientHeaderSubtitle = Color(0xFF202124),
     buttonOutlineOnGradient = LogoNavy,
     appGradientStops = listOf(Indigo, Aqua, Coral),
-    readingGradientStops = listOf(MutedIndigo, MutedAqua, MutedCoral)
+    readingGradientStops = DefaultReadingGround.map { it.vivid },
+    readingGroundVividStops = DefaultReadingGround.map { it.vivid },
+    readingGroundPaleStops = DefaultReadingGround.map { it.pale }
 )
 
 /**
@@ -227,7 +269,8 @@ internal val LightAppColors = AppColorScheme(
 internal val DarkAppColors = AppColorScheme(
     panel = Color(0xFF2A2D45),
     // ダークでは段階を作らない（判断5）。全段階を panel と同値にして演出を殺す。
-    notePaper = NotePaperTones.uniform(Color(0xFF2A2D45)),
+    // 読む画面の紙は夜の紺（→ note_typesetting §5.6）。ダークでは段階を作らない（判断5）。
+    notePaper = NotePaperTones.uniform(Color(0xFF111A2E)),
     noteField = DarkNoteFieldTones,
     crystalGem = DarkCrystalGemTones,
     codePanel = Color(0xFF202234),
@@ -253,6 +296,23 @@ internal val DarkAppColors = AppColorScheme(
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFC6D3E6),
     linkText = Color(0xFF7BA6FF),
+    readingAccent = Color(0xFFA79EFF),
+    readingPlateRim = Color(0x0FFFFFFF),
+    readingPlateLight = Color(0x0D96AFFF),
+    readingCard = Color(0xFF18233A),
+    readingChip = Color(0xFF1B2640),
+    readingBadge = Color(0xFF2B2D5C),
+    // ダークでは紙より暗い窓にする（紙の上の部品を紙より明るくする順の例外 → note_typesetting 判断14）。
+    codeWindow = Color(0xFF070C18),
+    onCodeWindow = Color(0xFFD7DEEA),
+    codeWindowLabel = Color(0xFF8E9AB0),
+    codeWindowRule = Color(0x14FFFFFF),
+    calloutFaces = CalloutFaceTones(
+        summary = CalloutFaceTone(surface = Color(0xFF18233A), title = Color(0xFFA9BBDD)),
+        question = CalloutFaceTone(surface = Color(0xFF1C2244), title = Color(0xFFA99CFF)),
+        example = CalloutFaceTone(surface = Color(0xFF12302C), title = Color(0xFF5FD0C0)),
+        caution = CalloutFaceTone(surface = Color(0xFF2E2614), title = Color(0xFFE3B85A))
+    ),
     errorText = Color(0xFFFF6B6B),
     // 暗所の赤は明るいので、その上に載る文字は黒。白のままだと 2.78 まで落ちる。
     errorSurface = Color(0xFFFF6B6B),
@@ -298,7 +358,10 @@ internal val DarkAppColors = AppColorScheme(
     // 彩度ではなく明度で沈める（縁だけに残す案は見送り → features/dark_mode.md 判断3）。
     appGradientStops = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
     // 「読む」画面はさらに静かに。触る画面との性質の差はダークでも保つ。
-    readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
+    readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24)),
+    // ノートを読む画面の場は夜の紺。3色の色相を残したまま紺へ沈める。強さの設定はダークでは効かないので両方同じ。
+    readingGroundVividStops = DarkReadingGround,
+    readingGroundPaleStops = DarkReadingGround
 )
 
 // ---------------------------------------------------------------------------
@@ -347,6 +410,17 @@ internal val OnSurfaceMetaBlue: Color @Composable @ReadOnlyComposable get() = cu
 internal val OnVibrant: Color @Composable @ReadOnlyComposable get() = current.onVibrant
 internal val OnVibrantMuted: Color @Composable @ReadOnlyComposable get() = current.onVibrantMuted
 internal val LinkText: Color @Composable @ReadOnlyComposable get() = current.linkText
+internal val ReadingAccent: Color @Composable @ReadOnlyComposable get() = current.readingAccent
+internal val ReadingPlateRim: Color @Composable @ReadOnlyComposable get() = current.readingPlateRim
+internal val ReadingPlateLight: Color @Composable @ReadOnlyComposable get() = current.readingPlateLight
+internal val ReadingCard: Color @Composable @ReadOnlyComposable get() = current.readingCard
+internal val ReadingChip: Color @Composable @ReadOnlyComposable get() = current.readingChip
+internal val ReadingBadge: Color @Composable @ReadOnlyComposable get() = current.readingBadge
+internal val CodeWindow: Color @Composable @ReadOnlyComposable get() = current.codeWindow
+internal val OnCodeWindow: Color @Composable @ReadOnlyComposable get() = current.onCodeWindow
+internal val CodeWindowLabel: Color @Composable @ReadOnlyComposable get() = current.codeWindowLabel
+internal val CodeWindowRule: Color @Composable @ReadOnlyComposable get() = current.codeWindowRule
+internal val CalloutFaces: CalloutFaceTones @Composable @ReadOnlyComposable get() = current.calloutFaces
 
 // -- 意味色 --
 internal val ErrorText: Color @Composable @ReadOnlyComposable get() = current.errorText
@@ -404,7 +478,18 @@ internal val ButtonOutlineOnGradient: Color
 
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient
+
+/** 起動の画面と冊子の地（低彩度の3色）。ノートを読む画面の地は [ReadingGround] で、強さの設定はこちらに効かない。 */
 internal val ReadingGradient: Brush @Composable @ReadOnlyComposable get() = current.readingGradient
 
-/** 読む画面の地（[ReadingGradient]）の停止色。地の上に重なる部品を、地の続きとして塗るときに使う（→ [diagonalGradientOver]）。 */
-internal val ReadingGradientStops: List<Color> @Composable @ReadOnlyComposable get() = current.readingGradientStops
+/**
+ * ノートを読む画面（本文の紙と机の帯）の地。ライトは強さをオプションで選び、既定は淡い（→ [readingGroundVivid]・docs/dev/features/note_typesetting.md 判断17）。
+ * ライトで鮮やかにしたときは [ReadingGradient] と同じ色になる。ダークは強さによらず夜の紺（→ 同 §5.6）。
+ */
+internal val ReadingGround: Brush
+    @Composable @ReadOnlyComposable get() = if (readingGroundVivid()) current.readingGroundVivid else current.readingGroundPale
+
+/** ノートを読む画面の地（[ReadingGround]）の停止色。地の上に重なる部品を、地の続きとして塗るときに使う（→ [diagonalGradientOver]）。 */
+internal val ReadingGroundStops: List<Color>
+    @Composable @ReadOnlyComposable get() = if (readingGroundVivid()) current.readingGroundVividStops else current.readingGroundPaleStops
+

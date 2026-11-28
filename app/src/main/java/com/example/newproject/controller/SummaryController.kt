@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
@@ -106,7 +108,7 @@ class SummaryController(
                             pending = null
                             setStateIfCurrent(
                                 request.requestId,
-                                SummaryState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
+                                SummaryState.Error(failureText(status.e, FailureScene.ModelDownload))
                             )
                         }
                     }
@@ -117,7 +119,7 @@ class SummaryController(
                 pending = null
                 setStateIfCurrent(
                     request.requestId,
-                    SummaryState.Error("ダウンロードエラー: ${e.message}")
+                    SummaryState.Error(failureText(e, FailureScene.ModelDownload))
                 )
             }
         }
