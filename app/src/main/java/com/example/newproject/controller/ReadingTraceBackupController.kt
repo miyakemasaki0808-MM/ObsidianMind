@@ -436,7 +436,7 @@ internal class ReadingTraceBackupController(
 
         val existingKeys = existingKeys(vaultKey)
             ?: return ReadingTraceBackupState.Error(
-                "端末側の読書痕跡を確認できませんでした。同期の完了を待ってからお試しください。"
+                "端末側の読書痕跡を確かめられませんでした。同期が終わったら試せます。"
             )
         val snapshots =
             readLocals(traces, vaultKey, existingKeys, generation, ReadingTraceBackupStep.IMPORT_SCAN)
@@ -494,7 +494,7 @@ internal class ReadingTraceBackupController(
         val existingKeys = existingKeys(target.vaultKey)
         if (existingKeys == null) {
             ReadingTraceBackupState.Error(
-                "端末側の読書痕跡を確認できませんでした。同期の完了を待ってからお試しください。"
+                "端末側の読書痕跡を確かめられませんでした。同期が終わったら試せます。"
             )
         } else {
             val fresh = readLocals(

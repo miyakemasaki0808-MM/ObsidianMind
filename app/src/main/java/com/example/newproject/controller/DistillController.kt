@@ -121,7 +121,7 @@ internal class DistillController(
 
         val note = currentNote()
         if (note == null) {
-            update(DistillState.Error("先にノートを開いてください。", canRetry = false))
+            update(DistillState.Error("ノートを開くと使えます。", canRetry = false))
             return
         }
         note.distillUnavailableReason?.let { reason ->
@@ -242,7 +242,7 @@ internal class DistillController(
         if (!isCurrent(requestId)) return
         val selectedIds = parseDistillResponseIds(response, prompt.validIds)
         if (selectedIds.isEmpty()) {
-            update(DistillState.Error("AIが有効な候補を選べませんでした。もう一度お試しください。"))
+            update(DistillState.Error("AIが候補を選べませんでした。やり直せます。"))
             return
         }
         val byId = prompt.candidates.associateBy { it.id }
@@ -730,7 +730,7 @@ internal class DistillController(
             is DistillRecoveryAssessment.ExpectedOutputPresent -> {
                 val deleted = withContext(ioDispatcher) { persistence.discardResolvedRecovery(assessment) }
                 if (deleted) {
-                    DistillState.RecoveryResolved("以前の保存処理を安全に確認しました。もう一度お試しください。")
+                    DistillState.RecoveryResolved("前の保存を確かめました。もう一度始められます。")
                 } else {
                     resolvedButUndeletableState()
                 }
