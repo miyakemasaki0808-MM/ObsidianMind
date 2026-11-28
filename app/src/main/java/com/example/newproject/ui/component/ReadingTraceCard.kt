@@ -164,18 +164,15 @@ internal fun reunionLead(slot: ReunionSlot.Shown): String? = when (slot.kind) {
  */
 internal fun readingTraceHeadline(card: ReadingTraceCard, nowMillis: Long): String {
     val whenLabel = elapsedLabel(card.lastVisitAtMillis, nowMillis)
+    // いつと、どこまでだけを言う。回数と割合は1文に詰めない（→ system/ui_copy.md §2 の3・7）。
     val where = when {
-        isReadToEnd(card.lastProgressPercent) -> "最後まで読んでいます"
-        !card.lastSectionTitle.isNullOrBlank() ->
-            "「${card.lastSectionTitle}」の節まで読んでいます（全体の${card.lastProgressPercent}%）"
-        else -> "全体の${card.lastProgressPercent}%のあたりまで読んでいます"
+        isReadToEnd(card.lastProgressPercent) -> "最後まで読みました"
+        !card.lastSectionTitle.isNullOrBlank() -> "「${card.lastSectionTitle}」の節まで読みました"
+        else -> "途中まで読みました"
     }
-    // 「5日前に読んで」には助詞が要るが「今日読んで」には要らない。
-    // 相対表記だけが「前」で終わるので、そこで見分ける。
+    // 「5日前に、」には助詞が要るが「今日、」には要らない。相対表記だけが「前」で終わるので、そこで見分ける。
     val whenPhrase = if (whenLabel.endsWith("前")) "${whenLabel}に" else whenLabel
-    // 2回以上開いていれば回数を添える（俯瞰の入口になる）。
-    val times = if (card.visitCount >= 2) "これまで${card.visitCount}回開いています。" else ""
-    return "$times${whenPhrase}読んで、$where。"
+    return "$whenPhrase、$where。"
 }
 
 /** ざっくりした経過表示。「再会」の距離感が伝わればよいので粒度は粗くする。 */

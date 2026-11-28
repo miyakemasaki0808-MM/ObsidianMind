@@ -141,7 +141,7 @@ fun AiTab(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = "先に「ノート」タブでノートを表示してください。",
+                    text = "「ノート」タブでノートを開くと使えます。",
                     color = OnSurface,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(16.dp)

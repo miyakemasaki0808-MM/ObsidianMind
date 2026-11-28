@@ -14,22 +14,16 @@ import org.junit.Test
 class ReadingTraceHeadlineTest {
 
     @Test
-    fun `single visit omits the count`() {
-        val text = readingTraceHeadline(card(visitCount = 1, section = "導入", progress = 40), NOW)
-
-        assertTrue("回数が出ている: $text", !text.contains("回開いています"))
-        assertTrue(text.contains("「導入」の節まで読んでいます"))
-        assertTrue(text.contains("40%"))
+    fun `回数と割合を出さず、いつとどの節までを言う`() {
+        listOf(1, 3).forEach { visits ->
+            val text = readingTraceHeadline(card(visitCount = visits, section = "導入", progress = 40), NOW)
+            assertEquals("今日、「導入」の節まで読みました。", text)
+            assertTrue("回数が出ている: $text", !text.contains("回"))
+            assertTrue("割合が出ている: $text", !text.contains("%"))
+        }
     }
 
-    @Test
-    fun `repeat visits show the count`() {
-        val text = readingTraceHeadline(card(visitCount = 3, section = "導入", progress = 40), NOW)
-
-        assertTrue(text.startsWith("これまで3回開いています。"))
-    }
-
-    // 「今日読んで」に助詞は付けず、「5日前に読んで」には付ける。
+    // 「今日、」に助詞は付けず、「5日前に、」には付ける。
     @Test
     fun `particle is added only to relative labels`() {
         val today = readingTraceHeadline(card(visitCount = 1, section = null, progress = 30), NOW)
@@ -38,24 +32,24 @@ class ReadingTraceHeadlineTest {
             NOW
         )
 
-        assertTrue(today.startsWith("今日読んで、"))
-        assertTrue(past.startsWith("5日前に読んで、"))
+        assertTrue(today.startsWith("今日、"))
+        assertTrue(past.startsWith("5日前に、"))
     }
 
     @Test
     fun `finished reading is stated plainly instead of a percentage`() {
         val text = readingTraceHeadline(card(visitCount = 1, section = "まとめ", progress = 100), NOW)
 
-        assertTrue(text.contains("最後まで読んでいます"))
+        assertTrue(text.contains("最後まで読みました"))
         assertTrue("到達率が残っている: $text", !text.contains("100%"))
     }
 
-    // 見出しの無いノートはセクション名が付かないので到達率だけで表す。
+    // 見出しの無いノートは節の名前が付かないので、途中までと言う。
     @Test
-    fun `note without headings falls back to the percentage`() {
+    fun `note without headings says it was read partway`() {
         val text = readingTraceHeadline(card(visitCount = 1, section = null, progress = 30), NOW)
 
-        assertEquals("今日読んで、全体の30%のあたりまで読んでいます。", text)
+        assertEquals("今日、途中まで読みました。", text)
     }
 
     /**
@@ -75,10 +69,10 @@ class ReadingTraceHeadlineTest {
     }
 
     @Test
-    fun `blank section title falls back to the percentage`() {
+    fun `blank section title falls back to partway`() {
         val text = readingTraceHeadline(card(visitCount = 1, section = "  ", progress = 30), NOW)
 
-        assertTrue(text.contains("全体の30%のあたり"))
+        assertTrue(text.contains("途中まで読みました"))
     }
 
     @Test

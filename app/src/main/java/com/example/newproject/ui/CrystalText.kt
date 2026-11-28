@@ -60,6 +60,6 @@ internal fun crystalSourceLabel(noteTitle: String, field: NoteField?): String =
 
 /** 一覧がまだ空のときの説明。**何も要求しないことを伝える**（書く・押す操作は無い）。 */
 internal const val CRYSTAL_EMPTY_MESSAGE =
-    "まだ結晶はありません。ノートを読んで要約がたまると、読んできたものに共通する筋が、1日に多くて1つできます。"
+    "まだ結晶はありません。読み進めると、共通する筋が少しずつ結晶になります。"
 
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/M/d")
