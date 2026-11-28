@@ -262,7 +262,10 @@ internal fun NoteSpread(
         val currentShown by rememberUpdatedState(shown)
 
         // 組み直しや外からの送りで、読む位置を含む見開きが替わったら、そこを出す。めくりとは数えない（読む位置を替えない）。
-        LaunchedEffect(target, available) {
+        // **外からの送りの番号も契機にする。** タグの札だけのページは読む位置を持たないので、そこから前の見開きのブロックへ
+        // 送ると、読む位置の見開き（target）は変わらないまま。番号で合わせ直さないと、タグのページに残る（→ placeSpreadTrailer）。
+        val externalRequest = position.lastRequest.takeIf { it.source == BodyPositionSource.External }?.request
+        LaunchedEffect(target, available, externalRequest) {
             val page = target.coerceIn(0, available - 1)
             if (pagerState.currentPage != page) pagerState.scrollToPage(page)
         }

@@ -160,6 +160,11 @@ internal fun MarkdownNoteContent(
             ) {
                 // **幅は内容で決めず、置かれた幅いっぱいに組む。** 机の画面は一覧の幅の変化で、広がる途中の縮みと送りを見分ける
                 // （→ lazyFaceMoved）。内容で決めると、表示中の段落が替わるだけで幅が変わり、リンクの送りを縮みと取り違える。
+                // 本文が無くタグだけのノートは、一覧の外に札の行だけを置く。一覧に項目を足すと、架空のブロックの進捗と引用元を報告する。
+                if (blocks.isEmpty()) {
+                    if (tags.isNotEmpty()) NoteTagRow(tags, modifier = Modifier.padding(horizontal = columnInset))
+                    return@Box
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
