@@ -655,7 +655,7 @@ internal class DistillController(
                     val deleted = withContext(ioDispatcher) { persistence.discardResolvedRecovery(assessment) }
                     // 解決済みなら黙って捨てる（起動のたびに知らせる意味がない）。
                     // 削除に失敗したときだけ、確認を促すために表示する。
-                    if (!deleted) applyRecoveryResult(resolvedButUndeletableState())
+                    if (!deleted) applyRecoveryResult(resolvedButUndeletableState(assessment))
                 }
                 DistillRecoveryAssessment.None -> Unit
                 else -> unresolvedRecoveryState(assessment)?.let { applyRecoveryResult(it) }
@@ -685,9 +685,9 @@ internal class DistillController(
         update(next)
     }
 
-    private fun resolvedButUndeletableState() = DistillState.RecoveryRequired(
+    private fun resolvedButUndeletableState(assessment: DistillRecoveryAssessment) = DistillState.RecoveryRequired(
         DistillRecoveryKind.Corrupt,
-        "保存はできましたが、保存前の本文を消せませんでした。",
+        resolvedButUndeletableMessage(saved = assessment is DistillRecoveryAssessment.ExpectedOutputPresent),
         canRestore = false,
         canExport = false,
         canKeepCurrent = true
@@ -732,7 +732,7 @@ internal class DistillController(
                 if (deleted) {
                     DistillState.RecoveryResolved("前の保存を確かめました。もう一度始められます。")
                 } else {
-                    resolvedButUndeletableState()
+                    resolvedButUndeletableState(assessment)
                 }
             }
             else -> DistillState.Idle
@@ -824,3 +824,12 @@ internal class DistillController(
         const val DISTILL_FEATURE_LABEL = "蒸留"
     }
 }
+
+/**
+ * 前の保存の決着がついていて、保存前の本文の控えだけを消せなかったときの文（→ features/reflect_distill.md の起動時の判定）。
+ * **2つの決着を同じ文にしない** — 書き込む前に止まった（[saved] が偽、ノートは元のまま）のに「保存できた」と言うと、
+ * 太字が保存されていないのに保存できたと伝える。
+ */
+internal fun resolvedButUndeletableMessage(saved: Boolean): String =
+    if (saved) "前の保存はできていました。保存前の本文を消せませんでした。"
+    else "前の保存は書き込む前に止まっていて、ノートは元のままです。保存前の本文を消せませんでした。"
