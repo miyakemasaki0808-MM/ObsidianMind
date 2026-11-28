@@ -70,6 +70,15 @@ class BackupCleanupCopyTest {
     }
 
     @Test
+    fun `保留した群があるとき、候補0件の文で見つからない痕跡は無いと言わない`() {
+        val withHeld = noCandidateText(withheldGroups = 2)
+        assertFalse(withHeld, withHeld.contains("見つからない") || withHeld.contains("ありませんでした"))
+        assertTrue(withHeld, withHeld.contains("候補"))
+        // 候補も保留も無いときは、見つからない痕跡が無いことを言う。
+        assertTrue(noCandidateText(withheldGroups = 0).contains("見つからない痕跡はありませんでした"))
+    }
+
+    @Test
     fun `整理の文は判定できなかったことを読み取れないとして言う`() {
         val vaultRoot = blockedExplanation(ReadingTraceCleanupState.Blocked(OrphanBlockReason.VAULT_ROOT_UNREADABLE, 0))
         assertTrue(vaultRoot, vaultRoot.contains("読み取れ") && vaultRoot.contains("判定していません"))

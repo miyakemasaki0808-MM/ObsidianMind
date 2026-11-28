@@ -44,3 +44,10 @@ fun withheldReasonText(group: WithheldOrphans): String = when (group.reason) {
     OrphanWithholdReason.UNRESOLVABLE ->
         "痕跡を読み取れないので残します。"
 }
+
+/**
+ * 削除の候補が0件のときの文。**保留した群があるときに「見つからない痕跡は無い」と言わない** — 保留は見つからない痕跡を
+ * 残したものなので、同じ画面で「無い」と「残した」を同時に言うことになる。保留があれば、消せる候補が無いことだけを言う。
+ */
+fun noCandidateText(withheldGroups: Int): String =
+    if (withheldGroups > 0) "いま消せる候補はありません。" else "対応するノートが見つからない痕跡はありませんでした。"

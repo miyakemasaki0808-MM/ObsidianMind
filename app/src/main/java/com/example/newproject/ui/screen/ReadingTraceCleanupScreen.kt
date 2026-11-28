@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.OrphanCandidate
 import com.example.newproject.model.WithheldOrphans
 import com.example.newproject.model.state.ReadingTraceCleanupState
+import com.example.newproject.ui.noCandidateText
 import com.example.newproject.ui.blockedExplanation
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
@@ -196,7 +197,7 @@ private fun SuccessBody(
             // 「候補ゼロ」を明示する。無表示にすると保留中の状態と見分けが付かない。
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "対応するノートが見つからない痕跡はありませんでした。",
+                text = noCandidateText(state.withheld.size),
                 color = OnSurfaceFaint,
                 fontSize = 14.sp
             )
