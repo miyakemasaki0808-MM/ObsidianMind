@@ -2,7 +2,6 @@ package com.example.newproject.ui
 
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.screen.MEMO_INPUT_HINT
 import com.example.newproject.ui.screen.writeTargetLineHeight
 import org.junit.Assert.assertEquals
@@ -18,13 +17,12 @@ class MarginMemoCopyTest {
     }
 
     @Test
-    fun `入力欄の上の行は文字の倍率に合わせて2行分を取り、32dpを下回らない`() {
-        assertEquals(32.dp, writeTargetLineHeight(Density(2.75f, fontScale = 1f)))
-        assertEquals(32.dp, writeTargetLineHeight(Density(2.75f, fontScale = 0.85f)))
-        // 倍率 2.0 では、文字が組む1行の高さ（16sp を換算した値）の2行分。大きい倍率の換算は線形でない。
-        val large = Density(2.75f, fontScale = 2f)
-        val oneLine = with(large) { 16.sp.toDp() }
-        assertEquals(oneLine * 2, writeTargetLineHeight(large))
-        assertTrue("2行分が 32dp を超える", writeTargetLineHeight(large) > 32.dp)
+    fun `入力欄の上の行は測った2行分を取り、32dpを下回らない`() {
+        val density = Density(2.75f, fontScale = 1f)
+        // 倍率 1.0 の2行（16sp × 2 = 88px）は 32dp。
+        assertEquals(32.dp, writeTargetLineHeight(88, density))
+        // 倍率 2.0 で字の比で解いた2行（1行 32dp = 88px の2倍）は 64dp。sp の換算で出す 56dp では足りない。
+        assertEquals(64.dp, writeTargetLineHeight(176, density))
+        assertTrue(writeTargetLineHeight(176, density) > 32.dp)
     }
 }

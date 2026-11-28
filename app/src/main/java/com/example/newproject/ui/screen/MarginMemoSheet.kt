@@ -55,6 +55,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -77,6 +78,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -781,30 +785,33 @@ private fun PaneRebuttal(sentence: RebuttalSentence, onOpen: (RelatedNote) -> Un
  * 「本文を戻す」でその節へ本文を送る。
  */
 @Composable
-private fun WriteTargetLine(
+internal fun WriteTargetLine(
     notice: SectionRef?,
     hasHeadings: Boolean,
     onJumpToSection: (SectionRef) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 2行分の高さは、描く字と同じ書式で測る。大きい倍率では行の高さを文字の大きさとの比で解くので、sp を換算しても合わない。
+    val style = LocalTextStyle.current.merge(WRITE_TARGET_TEXT_STYLE)
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val twoLinesPx = remember(style, density) { measurer.measure(AnnotatedString("あ\nあ"), style, density = density).size.height }
     Row(
-        modifier = modifier.fillMaxWidth().height(writeTargetLineHeight(LocalDensity.current)),
+        modifier = modifier.fillMaxWidth().height(writeTargetLineHeight(twoLinesPx, density)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (notice == null) {
             Text(
                 text = MEMO_INPUT_HINT,
                 color = OnSurfaceFaint,
-                fontSize = 12.sp,
-                lineHeight = WRITE_TARGET_TEXT_LINE_HEIGHT,
+                style = style,
                 maxLines = 2
             )
         } else {
             Text(
                 text = "「${sectionLabel(notice, hasHeadings)}」へ書き込み中",
                 color = AccentText,
-                fontSize = 12.sp,
-                lineHeight = WRITE_TARGET_TEXT_LINE_HEIGHT,
+                style = style,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
@@ -820,18 +827,18 @@ private fun WriteTargetLine(
 
 /** 書き込み先の1行の高さ。**知らせの有無で変えない**（入力欄を動かさないため）。 */
 private val WRITE_TARGET_LINE_HEIGHT = 32.dp
-private val WRITE_TARGET_TEXT_LINE_HEIGHT = 16.sp
+/** 入力欄の上の行の字。安全の1行と書き込み先の知らせが同じ書式で組み、行の高さの予約もこれで測る。 */
+private val WRITE_TARGET_TEXT_STYLE = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
 
 /** 入力欄の上の安全の1行。ノート本体が変わらないことだけを言う（→ system/ui_copy.md §2 の2・5）。 */
 internal const val MEMO_INPUT_HINT = "ノート本体は変わりません"
 
 /**
- * 入力欄の上の行の高さ。書き込み先の知らせと安全の1行が出入りしても入力欄が動かないように、**文字の倍率に合わせて2行分**を取り、
- * 32dp を下回らない。大きい文字でも安全の1行が末尾で切れずに折り返せる。
- * **1行の高さを換算してから2倍する** — 大きい文字の倍率は sp を線形に換算しないので、32sp を換算すると2行に足りない。
+ * 入力欄の上の行の高さ。書き込み先の知らせと安全の1行が出入りしても入力欄が動かないように、**描く字の2行分**（[twoLinesPx]、
+ * 同じ書式で測った高さ）を取り、32dp を下回らない。大きい文字でも安全の1行が末尾で切れずに折り返せる。
  */
-internal fun writeTargetLineHeight(density: Density): Dp =
-    maxOf(WRITE_TARGET_LINE_HEIGHT, with(density) { WRITE_TARGET_TEXT_LINE_HEIGHT.toDp() } * 2)
+internal fun writeTargetLineHeight(twoLinesPx: Int, density: Density): Dp =
+    maxOf(WRITE_TARGET_LINE_HEIGHT, with(density) { twoLinesPx.toDp() })
 
 /**
  * 前回の読書の跡（→ features/margin_pane.md §5.7）。**知らせるだけで、押せない。**
