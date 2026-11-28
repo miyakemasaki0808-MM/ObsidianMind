@@ -344,13 +344,16 @@ private fun ScopeChips(uiState: NoteUiState, onSelectFolder: (NoteFolder?) -> Un
             }
         }
         if (uiState.selectedFolder == null) {
-            // エラーではないが赤文字で出す（→ ai_picker 判断1）。
-            ScopeNote("タイトルが近い40本から選びます。意味で探したいときはフォルダを選んでください。", color = ErrorText)
+            // 既定の状態で出る注記なので、失敗の色を使わずに静かに出す（→ ai_picker 判断1・system/ui_copy.md §5）。
+            ScopeNote(SEARCH_ALL_SCOPE_NOTE)
         }
         // フォルダ列挙に失敗しても「すべて」では検索できる。操作を止めない注記に留める。
         uiState.foldersError?.let { ScopeNote(it) }
     }
 }
+
+/** 範囲が「すべて」のときの注記。フォルダを選ぶと候補の絞り方が変わることだけを言い、内部の本数は出さない。 */
+internal const val SEARCH_ALL_SCOPE_NOTE = "フォルダを選ぶと、中身まで深く探せます"
 
 /** グラデーション直上に文字を置かない。注記も面を持たせる。 */
 @Composable
