@@ -232,7 +232,7 @@ private fun DistillPanel(
                     } else {
                         Button(
                             onClick = onStart,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi)
                         ) { Text("重要な箇所を見つける", color = OnButtonAi) }
                     }

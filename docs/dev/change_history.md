@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-28 | 蒸留の「重要な箇所を見つける」ボタンも高さを最小だけにし、大きい文字で折り返せるようにした | [UI の指針](system/ui_design_principles.md) |
 | 2026-11-28 | 失敗の文が画面の前置きと二重になるのを直し、取得・冊子・並べ読み・余白メモ・退避・整理の失敗も場面の文に寄せた | [背景のAI](system/background_ai_ux.md) §6 |
 | 2026-11-28 | 紙の題の欄を外し、居場所を見出しの帯の1行に、タグの札を本文の末尾（見開きは最後のページ）に移した | [Rediscover](features/rediscover.md) §5.1・[組版の型](features/note_typesetting.md) §5.3 |
 | 2026-11-28 | 道筋とファイル名を紙の題の欄から見出しの帯の1行へ移し、タグを本文の末尾へ置く設計に改めた（未実装） | [Rediscover](features/rediscover.md) 判断7・[組版の型](features/note_typesetting.md) §5.3 |
