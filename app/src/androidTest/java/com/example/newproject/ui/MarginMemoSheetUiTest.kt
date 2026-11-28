@@ -177,11 +177,11 @@ class MarginMemoSheetUiTest {
             onNoticeShown = {},
             onStopAll = {}
         )
-        composeRule.onNodeWithText("生成を中止").assertDoesNotExist()
+        composeRule.onNodeWithText("生成を止める").assertDoesNotExist()
         composeRule.onNodeWithText("全節の生成を止める").assertIsDisplayed()
 
         inputs = SummaryRowInputs(summary = generating, onRequest = {}, onRetry = {}, onCancel = {}, onNoticeShown = {})
-        composeRule.onNodeWithText("生成を中止").assertIsDisplayed()
+        composeRule.onNodeWithText("生成を止める").assertIsDisplayed()
         composeRule.onNodeWithText("全節の生成を止める").assertDoesNotExist()
 
         inputs = SummaryRowInputs(summary = null, onRequest = {}, onRetry = {}, onCancel = {}, onNoticeShown = {})

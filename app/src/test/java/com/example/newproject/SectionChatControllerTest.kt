@@ -844,7 +844,7 @@ class SectionChatControllerTest {
         assertEquals("Aの要約", summaryOf(state, A)?.summary)
     }
 
-    /** 全節の間の「生成を中止」は行に出さないが、遅れて届いた押下で全節を止めない。 */
+    /** 全節の間の「生成を止める」は行に出さないが、遅れて届いた押下で全節を止めない。 */
     @Test
     fun `全節の生成中は1節の中止が効かない`() = runTest {
         val ai = FakeAiClient().suspendGenerations()

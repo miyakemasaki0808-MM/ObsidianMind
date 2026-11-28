@@ -637,10 +637,10 @@ internal fun MarginMemoSheetContent(
                 TextButton(onClick = {
                     onDelete(target)
                     pendingDelete = null
-                }) { Text("消す", color = DangerAction) }
+                }) { Text("削除", color = DangerAction) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("やめる") }
+                TextButton(onClick = { pendingDelete = null }) { Text("キャンセル") }
             }
         )
     }

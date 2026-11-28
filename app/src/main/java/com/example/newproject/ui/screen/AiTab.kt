@@ -282,7 +282,7 @@ private fun DistillPanel(
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("キャンセル") }
+                        OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("やめる") }
                         Button(
                             onClick = { showConfirmation = true },
                             enabled = state.canSaveSelection,

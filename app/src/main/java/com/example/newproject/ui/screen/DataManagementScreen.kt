@@ -197,7 +197,7 @@ private fun BackupStatus(
                         Text(progress, color = OnSurfaceFaint, fontSize = 12.sp)
                     }
                 }
-                TextButton(onClick = onCancel) { Text("中止", color = OnSurface) }
+                TextButton(onClick = onCancel) { Text("止める", color = OnSurface) }
             }
         }
 
