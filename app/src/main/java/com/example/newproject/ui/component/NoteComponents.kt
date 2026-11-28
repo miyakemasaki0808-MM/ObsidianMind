@@ -108,6 +108,8 @@ internal fun ReadingProgressReporter(
     val imageBlocks = remember(sectionModel) { imageBlockRefs(sectionModel?.blocks.orEmpty()) }
     LaunchedEffect(sectionModel, imageBlocks) {
         val model = sectionModel ?: return@LaunchedEffect
+        // 本文の無いノートは報告しない。共有の一覧に前のノートの配置が残っていても、架空のブロックを報告しない。
+        if (model.blocks.isEmpty()) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             val last = layout.visibleItemsInfo.lastOrNull() ?: return@snapshotFlow null
