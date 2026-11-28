@@ -220,7 +220,7 @@ class DistillRangeAdjustUiTest {
             }
         }
 
-        composeRule.onNodeWithText("太字が目安の30%を超えます", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("太字が多めです", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("プレビュー").performScrollTo().assertIsEnabled().performClick()
         composeRule.onNodeWithText("変更後の太字率は 42.0% で", substring = true).assertIsDisplayed()
     }

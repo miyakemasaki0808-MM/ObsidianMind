@@ -165,7 +165,7 @@ internal class DistillWriteRepository(
         }
         val initialHash = sha256Hex(initialBytes)
         if (initialHash != request.baselineHash) {
-            return DistillWriteResult.Conflict(initialHash, "ノートが外部で変更されています。再解析してください。")
+            return DistillWriteResult.Conflict(initialHash, "ノートが外で書き換えられました。")
         }
         // 書くのは BOM を戻したこのバイト列。サイズ・期待ハッシュ・復旧の記録もこちらで取る
         // （本文のバイト列で取ると、書いた後の検証と再読込の照合が必ず外れる）。
@@ -239,7 +239,7 @@ internal class DistillWriteRepository(
                     )
                 }
                 recordCreated = false
-                return DistillWriteResult.Conflict(finalHash, "保存直前にノートが変更されました。再解析してください。")
+                return DistillWriteResult.Conflict(finalHash, "保存の直前にノートが書き換えられました。")
             }
 
             failureStage = DistillWriteFailureStage.RECOVERY_RECORD

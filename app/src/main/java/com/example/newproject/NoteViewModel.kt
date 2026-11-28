@@ -741,23 +741,21 @@ class NoteViewModel internal constructor(
                 content = snapshot.content,
                 targetUri = uri.toString(),
                 originalHash = snapshot.hash,
-                distillUnavailableReason = if (tooLarge) {
-                    "このノートは256KBを超えるため蒸留できません。"
-                } else null
+                distillUnavailableReason = if (tooLarge) DISTILL_TOO_LARGE_REASON else null
             )
         } catch (error: NoteFileTooLargeException) {
             displayFallback(
                 contentResolver = contentResolver,
                 title = title,
                 uri = uri,
-                reason = "このノートは256KBを超えるため蒸留できません。"
+                reason = DISTILL_TOO_LARGE_REASON
             )
         } catch (error: InvalidNoteEncodingException) {
             displayFallback(
                 contentResolver = contentResolver,
                 title = title,
                 uri = uri,
-                reason = "このノートはUTF-8として安全に確認できないため蒸留できません。"
+                reason = DISTILL_UNREADABLE_TEXT_REASON
             )
         }
     }
@@ -781,7 +779,7 @@ class NoteViewModel internal constructor(
             content = loaded.text,
             targetUri = uri.toString(),
             distillUnavailableReason = if (loaded.isTruncated) {
-                "$reason 大きすぎるため先頭1MBのみ表示しています。"
+                "$reason $DISPLAY_TRUNCATED_NOTICE"
             } else {
                 reason
             }
@@ -886,3 +884,8 @@ class NoteViewModel internal constructor(
         private const val DISTILL_OUTPUT_GROWTH_BYTES = DistillLimits.FINAL_SELECTION_LIMIT * 4
     }
 }
+
+/** 蒸留できない理由。上限のバイト数と文字コードの名前は画面に出さない（→ docs/dev/system/ui_copy.md §2 の3）。 */
+internal const val DISTILL_TOO_LARGE_REASON = "大きすぎるので蒸留できません。"
+internal const val DISTILL_UNREADABLE_TEXT_REASON = "文字を確かめられないので蒸留できません。"
+internal const val DISPLAY_TRUNCATED_NOTICE = "大きすぎるので、初めの部分だけを出しています。"

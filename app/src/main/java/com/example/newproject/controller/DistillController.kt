@@ -696,21 +696,21 @@ internal class DistillController(
         when (assessment) {
             is DistillRecoveryAssessment.Diverged -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Diverged,
-                "保存が中断されたか、ファイルが外部で変更されました。現在のファイルを維持するか、保存前へ復元してください。",
+                "保存が途中で止まったか、外で書き換えられました。",
                 canRestore = true,
                 canExport = true,
                 canKeepCurrent = true
             )
             is DistillRecoveryAssessment.Inaccessible -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Inaccessible,
-                "元のノートへアクセスできません。保存前の本文を別ファイルへ書き出してください。",
+                "元のノートを開けません。保存前の本文は書き出せます。",
                 canRestore = false,
                 canExport = true,
                 canKeepCurrent = false
             )
             is DistillRecoveryAssessment.Corrupt -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Corrupt,
-                "復旧情報が破損しています。現在のファイルを確認してから復旧情報を破棄してください。",
+                "保存前の本文を読み取れません。今のファイルを確かめて、維持して終えられます。",
                 canRestore = false,
                 canExport = false,
                 canKeepCurrent = true

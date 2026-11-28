@@ -158,13 +158,8 @@ internal fun DistillRangeSheetContent(
 
         AdjustableParentText(item = item, onDragEdge = onDragEdge)
         // つまみは行の下辺に重ねて描くので、次の行と重ならないだけの間を空ける。
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            "端のつまみを引くと、好きな範囲にできます。太字にできるのは、この文の内側だけです。",
-            fontSize = 11.sp,
-            color = OnSurfaceSubtle
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        // 引ける・文の内側だけということは、つまみの形と動きで伝え、説明の文を置かない（→ system/ui_copy.md §2 の2）。
+        Spacer(modifier = Modifier.height(28.dp))
 
         // **存在する段だけを出す。** 押せない選択肢は理由の説明を毎回要求する。
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -430,8 +425,8 @@ internal fun overlapNotice(isDeselectedByOverlap: Boolean, otherDeselectedCount:
  */
 internal fun distillBoldNotice(isWithinBoldLimit: Boolean, selectedCount: Int): String? = when {
     isWithinBoldLimit -> null
-    selectedCount == 0 -> "! 既にある太字だけで目安の30%を超えています。足したい箇所は自分でチェックできます。"
-    else -> "! 太字が目安の30%を超えます。多すぎると要点が目立ちにくくなりますが、このまま保存できます。"
+    selectedCount == 0 -> "! 既にある太字だけで多めです。足したい箇所は自分でチェックできます"
+    else -> "! 太字が多めです。このまま保存できます"
 }
 
 /**

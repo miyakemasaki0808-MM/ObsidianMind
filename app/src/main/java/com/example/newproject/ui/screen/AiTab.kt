@@ -218,7 +218,7 @@ private fun DistillPanel(
             Text("✦ ノートを蒸留", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentText)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "AIが重要な箇所を選び、確認した箇所だけをノート内で太字にします。",
+                DISTILL_PANEL_LEAD,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 color = OnSurface
@@ -299,7 +299,7 @@ private fun DistillPanel(
                 is DistillState.Conflict -> {
                     Text(state.message, fontSize = 13.sp, color = ErrorText)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("最新の本文で再解析") }
+                    Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("最新の本文で選び直す") }
                 }
                 is DistillState.RecoveryRequired -> {
                     Text("復旧が必要です", fontWeight = FontWeight.Bold, color = ErrorText)
@@ -369,15 +369,11 @@ private fun DistillPanel(
                         Text(item.text, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = OnSurface)
                     }
                     if (!candidates.isWithinBoldLimit) {
-                        Text(
-                            "変更後の太字率は %.1f%% で、目安の30%%を超えます。"
-                                .format(candidates.projectedBoldRatio * 100.0),
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp,
-                            color = ErrorText
-                        )
+                        Text(DISTILL_CONFIRM_BOLD_HEAVY, fontSize = 12.sp, lineHeight = 17.sp, color = OnSurface)
                     }
-                    Text("元の文字は削除しません。この操作の取り消し機能はありません。", fontSize = 12.sp, color = ErrorText)
+                    // 起きることと、取り消せないことを別の行で言う（→ system/ui_copy.md §2 の6）。
+                    Text(DISTILL_CONFIRM_WHAT_HAPPENS, fontSize = 12.sp, color = OnSurface)
+                    Text(DISTILL_CONFIRM_IRREVERSIBLE, fontSize = 12.sp, color = ErrorText)
                 }
             },
             confirmButton = {
@@ -396,7 +392,7 @@ private fun DistillPanel(
         AlertDialog(
             onDismissRequest = { showRestoreConfirmation = false },
             title = { Text("保存前の本文へ復元しますか？") },
-            text = { Text("現在のファイル内容は保存前の本文で置き換わります。必要なら先に別ファイルへ書き出してください。") },
+            text = { Text("今のファイルが、保存前の本文に置き換わります。") },
             confirmButton = {
                 Button(onClick = {
                     showRestoreConfirmation = false
@@ -413,7 +409,12 @@ private fun DistillPanel(
         AlertDialog(
             onDismissRequest = { showKeepConfirmation = false },
             title = { Text("現在のファイルを維持しますか？") },
-            text = { Text("保存前の本文を保持している復旧情報を削除します。この操作後はアプリから復元できません。") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("保存前の本文を消します。")
+                    Text("この後は復元できません。", color = ErrorText)
+                }
+            },
             confirmButton = {
                 Button(onClick = {
                     showKeepConfirmation = false
@@ -563,3 +564,14 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
         }
     }
 }
+
+/** 蒸留の面の1行（→ system/ui_copy.md §2 の2）。手順は部品に任せ、何をするかだけを言う。 */
+internal const val DISTILL_PANEL_LEAD = "要点を選んで、太字で残す"
+
+/** 確定の確認で、太字が目安を超えるとき。目安の数は出さない（→ system/ui_copy.md §2 の3）。 */
+internal const val DISTILL_CONFIRM_BOLD_HEAVY = "太字が多めになります。"
+
+/** 確定の確認で、起きること。取り消せないことは [DISTILL_CONFIRM_IRREVERSIBLE] として別の行に出す。 */
+internal const val DISTILL_CONFIRM_WHAT_HAPPENS = "文字は消えず、太字が加わります。"
+
+internal const val DISTILL_CONFIRM_IRREVERSIBLE = "取り消せません。"
