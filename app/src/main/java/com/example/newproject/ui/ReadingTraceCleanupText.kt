@@ -35,7 +35,8 @@ fun withheldLocation(group: WithheldOrphans): String = when {
 /** 保留した理由。**シャドーモードではここが観測対象そのもの。** */
 fun withheldReasonText(group: WithheldOrphans): String = when (group.reason) {
     OrphanWithholdReason.FOLDER_WIDE_ABSENCE ->
-        "フォルダごと見つかりません。読み取れなかっただけかもしれないので残します。"
+        // 判定はフォルダ全体の不在を確かめていない（同じ場所の複数の欠けを見ているだけ）。フォルダが無いと言い切らない。
+        "同じ場所のノートがいくつも見つかりません。読み取れなかっただけかもしれないので残します。"
 
     OrphanWithholdReason.UNREADABLE_FOLDER ->
         "このフォルダを読み取れませんでした。ノートがあるか確かめられません。"

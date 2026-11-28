@@ -1,6 +1,9 @@
 package com.example.newproject.ui
 
+import com.example.newproject.domain.assessReadingTraceOrphans
+import com.example.newproject.model.OrphanAssessment
 import com.example.newproject.model.OrphanBlockReason
+import com.example.newproject.model.OrphanTraceInfo
 import com.example.newproject.model.OrphanWithholdReason
 import com.example.newproject.model.WithheldOrphans
 import com.example.newproject.model.state.ReadingTraceCleanupState
@@ -32,6 +35,38 @@ class BackupCleanupCopyTest {
         (cleanupTexts + backupProtectedDataText() + revisedPlanNotice()).forEach {
             assertFalse(it, it.contains("ください") || it.contains("お試し"))
         }
+    }
+
+    @Test
+    fun `同じ場所の複数の欠けを、フォルダ全体の不在として言い切らない`() {
+        // ideas の a・b が欠けて c は残る入力も、Vault 直下の2件の欠けも、判定は同じ理由になる。
+        listOf(WithheldOrphans("ideas", 2, OrphanWithholdReason.FOLDER_WIDE_ABSENCE), WithheldOrphans("", 2, OrphanWithholdReason.FOLDER_WIDE_ABSENCE)).forEach { group ->
+            val text = withheldReasonText(group)
+            assertFalse(text, text.contains("フォルダごと") || text.contains("フォルダが"))
+            assertTrue("複数の欠けと保留を言う: $text", text.contains("いくつも") && text.contains("残します"))
+            assertTrue("読み取れなかった可能性を言う: $text", text.contains("読み取れなかった"))
+        }
+    }
+
+    /** 判定器から文までを通す。ideas の a・b を消して c は残り、Vault 直下でも2件が欠ける。 */
+    @Test
+    fun `判定から文まで、2件の欠けをフォルダの不在と言わない`() {
+        val traces = mapOf(
+            "k-a" to OrphanTraceInfo("ideas/a.md", "a", 1, null),
+            "k-b" to OrphanTraceInfo("ideas/b.md", "b", 1, null),
+            "k-c" to OrphanTraceInfo("ideas/c.md", "c", 1, null),
+            "k-x" to OrphanTraceInfo("x.md", "x", 1, null),
+            "k-y" to OrphanTraceInfo("y.md", "y", 1, null),
+            "k-z" to OrphanTraceInfo("z.md", "z", 1, null)
+        )
+        val assessment = assessReadingTraceOrphans(
+            traceKeys = traces.keys,
+            noteKeys = setOf("k-c", "k-z"),
+            unreadableFolderPaths = emptySet()
+        ) { traces[it] }
+        val texts = (assessment as OrphanAssessment.Assessed).withheld.map { withheldReasonText(it) }
+        assertTrue("保留が無い: $assessment", texts.isNotEmpty())
+        texts.forEach { assertFalse(it, it.contains("フォルダごと")) }
     }
 
     @Test
