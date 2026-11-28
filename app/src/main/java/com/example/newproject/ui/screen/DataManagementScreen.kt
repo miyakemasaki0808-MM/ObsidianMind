@@ -104,9 +104,7 @@ fun DataManagementScreen(
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             // 平文であることと同期経路のリスクは、押す前に伝える（→ 判断2）。
-            text = "書き出したファイルの中身はそのままの文字で読めます。" +
-                "Vault の中へ保存すると Obsidian の同期でクラウドへ渡るため、" +
-                "既定では Vault の外を選んでください。",
+            text = BACKUP_PLAINTEXT_NOTICE,
             color = OnSurfaceFaint,
             fontSize = 12.sp
         )
@@ -121,7 +119,7 @@ fun DataManagementScreen(
         val enabled = vaultSelected && !busy
         if (!vaultSelected) {
             Text(
-                text = "Vault が選択されていないため、書き出しも読み戻しもできません。",
+                text = "Vault を選ぶと使えます",
                 color = OnSurfaceFaint,
                 fontSize = 12.sp
             )
@@ -214,8 +212,8 @@ private fun BackupStatus(
 
         is ReadingTraceBackupState.Planned -> Card {
             CardTitle(
-                if (state.revised) "端末側が変わったので確認し直してください"
-                else "読み戻す前に確認してください",
+                if (state.revised) "端末側が変わりました。見直せます"
+                else "読み戻す内容",
                 emphasis = state.revised
             )
             // **「まだ書いていない」を先に言う。** 二度目の確認を求められた利用者が
@@ -236,7 +234,7 @@ private fun BackupStatus(
         }
 
         is ReadingTraceBackupState.Imported -> Card {
-            CardTitle(if (state.interrupted) "途中で中止しました" else "読み戻しました")
+            CardTitle(if (state.interrupted) "途中で止めました" else "読み戻しました")
             Body(importResultSummary(state))
             state.withheld.forEach { item ->
                 Spacer(modifier = Modifier.height(4.dp))
@@ -286,3 +284,9 @@ private fun DismissRow(onDismiss: () -> Unit) {
 private fun SectionTitle(text: String) {
     Text(text = text, color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
 }
+
+/**
+ * 退避ファイルが平文であることと、Vault の中に置くと同期でクラウドへ渡ること（→ features/reading_trace_backup.md 判断2）。
+ * **押す前に伝えるので、いつも出す。** そのぶん1行に絞り、指示の口調にしない（→ system/ui_copy.md §2 の4・5）。
+ */
+internal const val BACKUP_PLAINTEXT_NOTICE = "中身はそのまま読める文字です。Vault の中に置くと、同期でクラウドへ渡ります。"

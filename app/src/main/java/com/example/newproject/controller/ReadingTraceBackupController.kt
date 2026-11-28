@@ -470,7 +470,7 @@ internal class ReadingTraceBackupController(
         if (state.current !is ReadingTraceBackupState.Planned) return
         val target = pending ?: return
         if (target.vaultKey != currentVaultKey()) {
-            state.set(ReadingTraceBackupState.Error("Vault が切り替わりました。選び直してください。"))
+            state.set(ReadingTraceBackupState.Error("Vault が替わりました。ファイルを選び直せます。"))
             pending = null
             return
         }

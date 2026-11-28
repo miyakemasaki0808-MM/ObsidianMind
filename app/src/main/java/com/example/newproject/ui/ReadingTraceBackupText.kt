@@ -30,9 +30,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
  * **欄を増やしたり落としたりしたら、ここと `ReadingTraceBackupTextTest` を同時に直す。**
  */
 fun backupProtectedDataText(): String =
-    "訪問の記録・AIの要約・あなたが置いた余白メモを" +
-        "1つのファイルへ書き出します。Vault のフォルダが消えたり端末を移したりしても、" +
-        "そこから読み戻せます。"
+    "訪問の記録・AIの要約・余白メモを1つのファイルに退避して、あとで読み戻せます。"
 
 /** 実行中の見出し。**適用だけは「途中で止めると戻せない」段階**なので言い方を変える。 */
 fun backupStepLabel(step: ReadingTraceBackupStep): String = when (step) {
@@ -79,13 +77,12 @@ fun importPlanSummary(plan: ReadingTraceImportPlan): String {
  * 押した操作がどこまで進んだのか分からないまま二度目を押すことになる。
  */
 fun revisedPlanNotice(): String =
-    "確定しようとしたときには、この端末の読書痕跡が下見のときから変わっていました。" +
-        "まだ1件も書き戻していません。下の内容で改めて確認してください。"
+    "下見のあとで、この端末の読書痕跡が変わりました。まだ1件も書き戻していません。"
 
 /** 読み戻しの結果。**中断したことを結果と別に言わない**（件数と同じ場所で言う）。 */
 fun importResultSummary(state: ReadingTraceBackupState.Imported): String {
     val head = if (state.interrupted) {
-        "途中で中止しました。ここまでに"
+        "途中で止めました。ここまでに"
     } else {
         "読み戻しました。"
     }
@@ -112,7 +109,7 @@ fun withheldImportText(item: WithheldImport): String {
                 "上書きしてよいか確かめられないので書き戻していません。"
 
         ReadingTraceImportWithholdReason.LOCAL_CHANGED ->
-            "$note は、書き戻す直前にこの端末側が変わったため見送りました。もう一度お試しください。"
+            "$note は、書き戻す直前にこの端末側が変わったので見送りました。"
 
         ReadingTraceImportWithholdReason.SAVE_FAILED ->
             "$note の痕跡を書き込めませんでした。"

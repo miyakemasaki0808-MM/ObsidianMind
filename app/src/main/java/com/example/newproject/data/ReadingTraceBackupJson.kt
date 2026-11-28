@@ -114,8 +114,7 @@ internal object ReadingTraceBackupJson {
         }
         if (version > ReadingTraceBackupLimits.FORMAT_VERSION) {
             return ReadingTraceBackupReadResult.Unusable(
-                "この退避ファイルは新しい版（v$version）で作られています。" +
-                    "アプリを更新してから読み戻してください。"
+                "この退避ファイルは新しい版のアプリで作られています。アプリを更新すると読み戻せます。"
             )
         }
         val array = root.optJSONArray(KEY_TRACES)

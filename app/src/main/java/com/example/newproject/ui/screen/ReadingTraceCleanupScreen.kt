@@ -173,7 +173,7 @@ private fun SuccessBody(
         if (state.deleteFailureCount > 0) {
             NoticeCard(
                 title = "${state.deleteFailureCount}件を削除できませんでした",
-                body = "しばらくしてからもう一度お試しください。",
+                body = "しばらくしてから、もう一度試せます。",
                 emphasis = true
             )
             Spacer(modifier = Modifier.height(14.dp))
@@ -185,8 +185,7 @@ private fun SuccessBody(
         if (state.unverifiedCount > 0) {
             NoticeCard(
                 title = "${state.unverifiedCount}件は削除してよいか確認できませんでした",
-                body = "ノートのフォルダを読み取れなかったため、消さずに残しています。" +
-                    "同期の完了を待ってから開き直してください。",
+                body = "ノートのフォルダを読み取れなかったので残しています。同期が終わったら開き直せます。",
                 emphasis = true
             )
             Spacer(modifier = Modifier.height(14.dp))
