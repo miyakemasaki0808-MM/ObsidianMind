@@ -61,6 +61,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
@@ -1333,7 +1334,7 @@ private fun NoteActionButtons(
         if (!vaultSelected) {
             Button(
                 onClick = onSelectVault,
-                modifier = Modifier.weight(1f).height(48.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
                 border = outline,
                 shape = RoundedCornerShape(24.dp)
@@ -1342,7 +1343,7 @@ private fun NoteActionButtons(
         Button(
             onClick = onRandomNote,
             enabled = !isLoading && vaultSelected,
-            modifier = Modifier.weight(1f).height(48.dp),
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             colors = if (vaultSelected) {
                 ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary)
             } else {

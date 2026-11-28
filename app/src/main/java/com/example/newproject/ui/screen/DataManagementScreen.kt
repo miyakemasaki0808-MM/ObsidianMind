@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -129,7 +130,7 @@ fun DataManagementScreen(
             Button(
                 onClick = onExport,
                 enabled = enabled,
-                modifier = Modifier.weight(1f).height(48.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
                     contentColor = OnButtonPrimary
@@ -141,7 +142,7 @@ fun DataManagementScreen(
             Button(
                 onClick = onImport,
                 enabled = enabled,
-                modifier = Modifier.weight(1f).height(48.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonSecondary,
                     contentColor = OnButtonSecondary
