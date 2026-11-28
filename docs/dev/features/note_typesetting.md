@@ -1,9 +1,9 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装済み（実機検証の前）。型の判定は作ったが画面には配線していない（区切り2で配線する）
-**最終検証:** 未検証（区切り1の実装を §5 と突き合わせた。実機検証の前）
+**状態:** 区切り1を実装し、実機検証まで終えた。型の判定は作ったが画面には配線していない（区切り2で配線する）
+**最終検証:** 2026-11-28 / `f6b7375a`（区切り1の実機検証。Pixel 10 Pro Fold の通し版で12件成功）
 **関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コールアウトの面は `ui/markdown/CalloutLabel.kt`（`calloutFaceOf`・`CalloutIcon`）・`MarkdownRenderer.kt`（`CalloutFaceFrame`）、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
-**関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
+**関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`・`NoteTitleBlockTest`・`CodeTokensTest`・`CalloutFaceTest`・`EmptyPlaceTextTest`・`EndSpaceTest`・`SpreadPageSizeTest`・`ReadingPlateLookTest`、画面テストは `TypesetRoundingUiTest`・`SpreadPageWidthUiTest`・`CalloutHeaderUiTest`・`EndSpaceUiTest`
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
 **関連:** [ui_design_principles](../system/ui_design_principles.md)（基準と好み）・[note_age_paper](note_age_paper.md)（紙の地色の持ち主）・
