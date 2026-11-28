@@ -46,7 +46,7 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
 | AI へ移る1行 | タイトルが0件のとき、同じ言葉で AI のモードへ移り、範囲を「すべて」にして探す | タイトルが0件 |
 | ことばでさがす | 自然文を入れると Nano が**3件**選ぶ | ボタンを押す |
 | 範囲のチップ | 「すべて」（最初から選択）と第一階層のフォルダ。「すべて」では候補の絞られ方を1行で添える | AI のモード |
-| AI不使用の注記 | 「キーワード一致で表示しています。」を添える | Nano が使えない／候補のIDを1件も返さなかった |
+| AI不使用の注記 | 「ことばの一致で出しています」を添える | Nano が使えない／候補のIDを1件も返さなかった |
 
 ## 4. 現在のユーザーフロー
 
@@ -110,7 +110,7 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
 
 **UI状態:** `titleSearch`（`TitleSearchState`: `Idle` / `Scanning` / `Matches` / `Error`）＋ `searchState`（`SearchState`: `Idle` / `Loading` / `Success(results, isAiAssisted)` / `Error`）＋ `folders` ＋ `selectedFolder`（いずれも `NoteUiState`）。
 
-`isAiAssisted` は Boolean 1本で、**false のときだけ「キーワード一致で表示しています。」を添える**（0件でも出す）。
+`isAiAssisted` は Boolean 1本で、**false のときだけ「ことばの一致で出しています」を添える**（0件でも出す）。
 false になるのは、Nano が使えないときと、動いて候補のIDを1件も返さなかったときである。**理由では割らない** — 非対応・未取得・DL中・
 一時的な不可・IDが取れない応答のどれでも、この画面に出るものは同じだから。文言も理由を言わない — AI が動いた場合に
 「使えないため」は事実でない（→ [background_ai_ux](../system/background_ai_ux.md) §6 判断4）。

@@ -355,6 +355,12 @@ private fun ScopeChips(uiState: NoteUiState, onSelectFolder: (NoteFolder?) -> Un
 /** 範囲が「すべて」のときの注記。フォルダを選ぶと候補の絞り方が変わることだけを言い、内部の本数は出さない。 */
 internal const val SEARCH_ALL_SCOPE_NOTE = "フォルダを選ぶと、中身まで深く探せます"
 
+/** 結果の空の場。いくつ出るかは言わない。 */
+internal const val SEARCH_IDLE_TEXT = "ことばを入れると、近いノートが出ます"
+
+/** AI が選ばなかったときの断り書き。**理由は言わない**（→ features/ai_picker.md 判断1）。 */
+internal const val SEARCH_KEYWORD_NOTICE = "ことばの一致で出しています"
+
 /** グラデーション直上に文字を置かない。注記も面を持たせる。 */
 @Composable
 private fun ScopeNote(message: String, color: Color = OnSurfaceFaint) {
@@ -439,7 +445,7 @@ private fun SearchResultPanel(
         Column(modifier = Modifier.padding(12.dp)) {
             when (state) {
                 is SearchState.Idle -> Text(
-                    "ことばを入れてさがすと、ここに3件出ます。",
+                    SEARCH_IDLE_TEXT,
                     fontSize = 13.sp,
                     color = OnSurfaceFaint
                 )
@@ -451,7 +457,7 @@ private fun SearchResultPanel(
                     // AIを使わずに探した事実が消える。
                     if (!state.isAiAssisted) {
                         Text(
-                            "キーワード一致で表示しています。",
+                            SEARCH_KEYWORD_NOTICE,
                             fontSize = 12.sp,
                             color = OnSurfaceFaint
                         )
