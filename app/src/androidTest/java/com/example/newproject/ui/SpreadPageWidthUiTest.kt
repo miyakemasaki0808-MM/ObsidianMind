@@ -55,7 +55,6 @@ class SpreadPageWidthUiTest {
                     Box(modifier = Modifier.requiredSize(width = 800.dp, height = 600.dp).onGloballyPositioned { boxLeft = it.positionInRoot().x; boxWidth = it.size.width }) {
                         NoteSpread(
                             noteKey = NOTE,
-                            title = "見開き",
                             sectionModel = model,
                             position = remember { BodyPosition(LazyListState()) },
                             paperColor = Color.White,

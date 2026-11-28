@@ -1,8 +1,8 @@
 # Rediscover（ランダム表示）
 
-**状態:** 実装済み・稼働中。**アプリの入口であり心臓**。読む画面の居場所の1行（§5.1・判断7）は設計だけで未実装
+**状態:** 実装済み・稼働中。**アプリの入口であり心臓**。読む画面の居場所の1行（§5.1・判断7）は実装済み・実機は未確認
 **最終検証:** 2026-11-03 / `6dd72062`（走査の除外・共有・寿命の起点。`EXPLORE-06`・`11`〜`13`・`20`・`21`）。それ以外は 2026-10-06 / `6b39f134`
-**関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.presentDrawnNote()`（冊子と共有）/ `NoteViewModel.collectAllNotesCached()` / `NoteScanCache.kt` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン・見出しの帯）/ `ui/screen/ReaderLayout.kt`（並べ方）/ `ui/component/GradientHeader.kt`（見出しの帯）/ `ui/markdown/NoteTitleBlock.kt`（`noteFolderLabel`）
+**関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.presentDrawnNote()`（冊子と共有）/ `NoteViewModel.collectAllNotesCached()` / `NoteScanCache.kt` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン・見出しの帯）/ `ui/screen/ReaderLayout.kt`（並べ方）/ `ui/component/GradientHeader.kt`（見出しの帯）/ `ui/markdown/NoteTitleBlock.kt`（`noteFolderLabel`・`noteLocationOf`・`NoteLocationLine`）
 **関連テスト:** `NoteRepositoryTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
@@ -38,7 +38,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 | Vault未選択時の案内 | 「Vaultフォルダを選択して…」と出し、**ボタンは無効** | Vault が未選択 |
 | 空Vault | ノートが1件も無いことを伝える | 走査結果が0件 |
 | 再会カード | 「前回のあなた」を出す | **引いた経路だけ** — Rediscover と冊子の「これを読む」（`openNote` では出さない） |
-| 居場所の1行（未実装） | 見出しの帯の副題の行に、今のノートのフォルダの道筋とファイル名が淡く1行で出る | ノートが出ていて、見出しの帯が見えているとき |
+| 居場所の1行 | 見出しの帯の副題の行に、今のノートのフォルダの道筋とファイル名が淡く1行で出る | ノートが出ていて、見出しの帯が見えているとき |
 
 ## 4. 現在のユーザーフロー
 
@@ -89,7 +89,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
   並べ読みの「このノートへ移る」は右で読んでいた位置から開く（→ [margin_pane](margin_pane.md) §5.9）。
   Vault を選ぶ画面の結果は本文の位置の口と同じスコープ（画面の組み立ての中）で受ける。Activity で受けると口に届かず、この境界を通せない
 
-### 5.1 読む画面の居場所（未実装）
+### 5.1 読む画面の居場所
 
 **今どのノートにいるかは、紙ではなく見出しの帯に出す**（→ 判断7）。紙の中は本文だけにする（→ [note_typesetting](note_typesetting.md) §5.3）。
 
@@ -242,7 +242,7 @@ Obsidian も同じ分け方で、ファイル名は上のツールバーに UI �
 - **instrumentation:** `GradientHeaderTest`（見出しの霞を右へ広げない口が、右の余白へ霞を出さないこと）
 - **instrumentation:** `VaultScanInstrumentationTest`（実物SAFでの走査）/ `NoteReadingFlowTest`（読書画面。
   低い横長の枠で再会カードがあってもノート名と本文が見え、「読んだ」へ届くこと。別のノートを開くと先頭から始まること）
-- **居場所の1行（実装するとき）:** 中身を決める純関数の JVM テスト（Vault の直下・相対パスが分からないノート・深いフォルダ・ノートが出ていないときは今の文）。溢れたときにファイル名が残ることは画面のテストで見る
+- **居場所の1行:** 中身を決める純関数 `noteLocationOf` の JVM テスト（`NoteTitleBlockTest`。Vault の直下・相対パスが分からないノート・深いフォルダ・拡張子だけを外す）。溢れたときにファイル名が残ることの画面のテストは、まだ無い
 - **保証していないこと:**
   - **抽選の分布は検証していない。** `notes.random()` に委ねており、偏りのテストは無い
   - **走査キャッシュのTTL境界は端末で狙っていない**（端末は Debug APK の `VigilithNoteScan` の行で前後を見るまで。境界は制御時計のテスト）。60秒は見積もり

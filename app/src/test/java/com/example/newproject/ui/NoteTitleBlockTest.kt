@@ -4,7 +4,9 @@ import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.markdown.frontmatterLines
 import com.example.newproject.ui.markdown.TAG_MAX_ROWS
 import com.example.newproject.ui.markdown.chipRowCount
+import com.example.newproject.ui.markdown.NoteLocation
 import com.example.newproject.ui.markdown.noteFolderLabel
+import com.example.newproject.ui.markdown.noteLocationOf
 import com.example.newproject.ui.markdown.tagChipText
 import com.example.newproject.ui.markdown.tagOverflowText
 import com.example.newproject.ui.markdown.visibleChipCount
@@ -23,6 +25,15 @@ class NoteTitleBlockTest {
         assertNull(noteFolderLabel("直下のノート.md"))
         assertNull(noteFolderLabel(null))
         assertNull(noteFolderLabel(""))
+    }
+
+    @Test
+    fun `居場所はフォルダの道筋と拡張子を外したファイル名で、直下と場所の分からないノートはファイル名だけ`() {
+        assertEquals(NoteLocation("reading / habits", "朝の30分"), noteLocationOf("reading/habits/朝の30分.md", "朝の30分.md"))
+        assertEquals(NoteLocation(null, "直下のノート"), noteLocationOf("直下のノート.md", "直下のノート.md"))
+        assertEquals(NoteLocation(null, "リンクで開いた"), noteLocationOf(null, "リンクで開いた.md"))
+        // 拡張子だけを外し、名前の中の「.md」は残す。
+        assertEquals(NoteLocation(null, "a.md.b"), noteLocationOf(null, "a.md.b.md"))
     }
 
     @Test

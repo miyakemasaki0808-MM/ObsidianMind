@@ -74,8 +74,8 @@ import com.example.newproject.ui.markdown.InlineMarkdownColors
 import com.example.newproject.ui.markdown.LocalNoteLinkTaps
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
 import com.example.newproject.ui.markdown.noteFolderLabel
-import com.example.newproject.ui.markdown.noteTitleBlockHeightPx
-import com.example.newproject.ui.markdown.NoteTitleBlock
+import com.example.newproject.ui.markdown.NoteTagRow
+import com.example.newproject.ui.markdown.noteTagRowHeightPx
 import com.example.newproject.ui.markdown.MeasuredSpreadBlock
 import com.example.newproject.ui.markdown.NoteImageBlockRef
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -120,9 +120,7 @@ import kotlin.coroutines.coroutineContext
 @Composable
 internal fun NoteSpread(
     noteKey: String,
-    title: String,
-    /** 題の欄のフォルダの道筋（→ [noteFolderLabel]）。タグは [sectionModel] から読む。 */
-    folder: String? = null,
+    /** 本文。タグの札は [sectionModel] から読み、最後のページの末尾に置く（→ placeSpreadTrailer）。 */
     sectionModel: NoteSectionModel,
     position: BodyPosition,
     paperColor: Color,
@@ -224,23 +222,25 @@ internal fun NoteSpread(
         // 再会カードを測ったか。**測る前の高さ（前に測った値か0）で組んだ見開きは、読書の記録へ送らない。** カードが出入りするたびに測り直す。
         var cardMeasured by remember(noteKey, leftPageTop != null) { mutableStateOf(false) }
         val leftHeight = pageContentHeight - if (leftPageTop != null) (cardHeightPx + with(density) { CardGap.roundToPx() }).toFloat() else 0f
-        val titleHeight = remember(title, folder, sectionModel.tags, textWidthPx, density, baseStyle) {
-            noteTitleBlockHeightPx(measurer, baseStyle, density, textWidthPx, title, folder, sectionModel.tags) +
-                with(density) { MarkdownBodyStyle.TitleGap.roundToPx() }
+        val tagRowHeight = remember(sectionModel.tags, textWidthPx, density, baseStyle) {
+            noteTagRowHeightPx(measurer, baseStyle, density, textWidthPx, sectionModel.tags)
         }
         // 描画の spacedBy は間を画素へ丸めて置く。
         val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.roundToPx().toFloat() }
-        val fitHeight = minOf(leftHeight, pageContentHeight, leftHeight - titleHeight)
-        val pages = remember(measured, leftHeight, pageContentHeight, titleHeight, spacingPx) {
-            paginateSpread(
+        val fitHeight = minOf(leftHeight, pageContentHeight)
+        // タグの札は測り終えてから、最後のページの末尾（入らなければ足した1枚）に置く。切れ端にはしない。
+        val trailer = remember(measured, leftHeight, pageContentHeight, tagRowHeight, spacingPx) {
+            val composed = paginateSpread(
                 blocks = measured.blocks.map { it.spread },
                 leftPageHeight = leftHeight,
                 rightPageHeight = pageContentHeight,
-                firstPageHeight = leftHeight - titleHeight,
                 blockSpacing = spacingPx,
                 complete = measured.complete
             )
+            (if (measured.complete) placeSpreadTrailer(composed, tagRowHeight, leftHeight, pageContentHeight, blockSpacing = spacingPx) else null)
+                ?: SpreadTrailer(composed, pageIndex = -1)
         }
+        val pages = trailer.pages
         // 測り終えるまでは、最後のページがまだ伸びるか、まとまりの判定を待って止めている。両方のページが組み上がった見開きだけを出す。
         val available = readySpreadCount(pages, measured.complete)
         val target = spreadIndexOf(pages, anchor)
@@ -361,10 +361,7 @@ internal fun NoteSpread(
                     }
                     SpreadPageView(
                         page = pages.getOrNull(spread * 2),
-                        showTitle = spread == 0,
-                        title = title,
-                        folder = folder,
-                        tags = sectionModel.tags,
+                        tags = sectionModel.tags.takeIf { trailer.pageIndex == spread * 2 },
                         measured = measured.blocks,
                         fitHeightPx = fitHeight,
                         paperColor = paperColor,
@@ -379,10 +376,7 @@ internal fun NoteSpread(
                 Spacer(modifier = Modifier.width(gutter))
                 SpreadPageView(
                     page = pages.getOrNull(spread * 2 + 1),
-                    showTitle = false,
-                    title = title,
-                    folder = folder,
-                    tags = sectionModel.tags,
+                    tags = sectionModel.tags.takeIf { trailer.pageIndex == spread * 2 + 1 },
                     measured = measured.blocks,
                     fitHeightPx = fitHeight,
                     paperColor = paperColor,
@@ -414,14 +408,14 @@ private fun Modifier.spreadTurnFace(rightPage: Boolean, offset: () -> Float, gut
         shape = ReadingSurfaceShape
     }
 
-/** 1ページ。読む面（紙の色は年代、形は読む面）に、切れ端を本文の順で並べる。[page] が null なら空のページ（最後の見開きの右）。 */
+/**
+ * 1ページ。読む面（紙の色は年代、形は読む面）に、切れ端を本文の順で並べる。[page] が null なら空のページ（最後の見開きの右）。
+ * [tags] を渡したページだけ、切れ端の後にタグの札の行を置く（→ placeSpreadTrailer が測った高さと同じ並び）。
+ */
 @Composable
 private fun SpreadPageView(
     page: SpreadPage?,
-    showTitle: Boolean,
-    title: String,
-    folder: String?,
-    tags: List<String>,
+    tags: List<String>?,
     measured: List<MeasuredSpreadBlock>,
     fitHeightPx: Float,
     paperColor: Color,
@@ -452,10 +446,6 @@ private fun SpreadPageView(
                         .onGloballyPositioned { pageTop[0] = it.boundsInRoot().top }
                 ) {
                     Column(modifier = Modifier.padding(PagePadding).widthIn(max = MarkdownBodyStyle.ColumnMaxWidth)) {
-                        if (showTitle) {
-                            NoteTitleBlock(title, folder, tags)
-                            Spacer(modifier = Modifier.height(MarkdownBodyStyle.TitleGap))
-                        }
                         Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)) {
                             page?.slices?.forEachIndexed { k, slice ->
                                 measured.getOrNull(slice.blockIndex)?.let { block ->
@@ -469,6 +459,7 @@ private fun SpreadPageView(
                                     }
                                 }
                             }
+                            if (!tags.isNullOrEmpty()) NoteTagRow(tags)
                         }
                     }
                 }

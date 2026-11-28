@@ -358,7 +358,6 @@ class SpreadInterleavingTest {
                         if (shown) key(generation) {
                             NoteSpread(
                                 noteKey = note.key,
-                                title = "見開き",
                                 sectionModel = note.model,
                                 position = spreadPosition,
                                 paperColor = Color.White,

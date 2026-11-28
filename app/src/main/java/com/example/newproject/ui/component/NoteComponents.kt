@@ -50,8 +50,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.draw.drawBehind
 import com.example.newproject.ui.theme.ReadingPlateLight
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
-import com.example.newproject.ui.markdown.NoteTitleBlock
-import com.example.newproject.ui.markdown.noteFolderLabel
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -254,9 +252,7 @@ internal fun NoteContentPanel(
      * （影と縁を付けると、紙と同じ色の地の上に紙の輪郭だけが見える）。
      */
     floating: Boolean = true,
-    /** 題の欄のフォルダの道筋（→ [noteFolderLabel]）。null なら出さない。 */
-    folder: String? = null,
-    /** 題の欄のタグ。本文の解析結果から渡す。 */
+    /** 本文の末尾に並べるタグの札。本文の解析結果から渡す（→ [NoteTagRow]）。 */
     tags: List<String> = emptyList()
 ) {
     val look = readingPlateLook(floating)
@@ -297,14 +293,13 @@ internal fun NoteContentPanel(
                     emptyPlaceText(state, uiState.vaultSelected)?.let { EmptyPlaceSentence(it, Modifier.padding(horizontal = inset)) }
                     Spacer(modifier = Modifier.weight(1f))
                 } else {
-                    NoteTitleBlock(state.title, folder, tags, modifier = Modifier.padding(horizontal = inset))
                     // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
                     // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**（Main外へ逃がした意味がなくなる）。
                     if (precomputedBlocks != null) {
                         if (listState != null) {
                             MarkdownNoteContent(
                                 content = state.content,
-                                modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
+                                modifier = Modifier.weight(1f),
                                 listState = listState,
                                 precomputedBlocks = precomputedBlocks,
                                 imageLoader = imageLoader,
@@ -316,17 +311,19 @@ internal fun NoteContentPanel(
                                 onQuote = onQuote,
                                 quoteOffers = quoteOffers,
                                 endSpace = endSpace,
-                                columnInset = inset
+                                columnInset = inset,
+                                tags = tags
                             )
                         } else {
                             MarkdownNoteContent(
                                 content = state.content,
-                                modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
+                                modifier = Modifier.weight(1f),
                                 precomputedBlocks = precomputedBlocks,
                                 imageLoader = imageLoader,
                                 imageMeasurements = imageMeasurements,
                                 onLink = onLink,
-                                columnInset = inset
+                                columnInset = inset,
+                                tags = tags
                             )
                         }
                     } else {

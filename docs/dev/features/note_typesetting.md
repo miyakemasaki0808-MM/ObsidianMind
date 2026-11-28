@@ -1,8 +1,8 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装し、実機検証まで終えた。型の判定は作ったが画面には配線していない（区切り2で配線する）。**題の欄は紙から外す設計に改めた（§5.3・判断8。未実装）**
+**状態:** 区切り1を実装し、実機検証まで終えた。型の判定は作ったが画面には配線していない（区切り2で配線する）。題の欄を紙から外し、タグの札を本文の末尾へ移した（§5.3・判断8。実機は未確認）
 **最終検証:** 2026-11-28 / `f6b7375a`（区切り1の実機検証。Pixel 10 Pro Fold の通し版で12件成功）
-**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コールアウトの面は `ui/markdown/CalloutLabel.kt`（`calloutFaceOf`・`CalloutIcon`）・`MarkdownRenderer.kt`（`CalloutFaceFrame`）、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
+**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コールアウトの面は `ui/markdown/CalloutLabel.kt`（`calloutFaceOf`・`CalloutIcon`）・`MarkdownRenderer.kt`（`CalloutFaceFrame`）、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、タグの札の行は `ui/markdown/NoteTitleBlock.kt`（`NoteTagRow`・`noteTagRowHeightPx`）と `ui/screen/SpreadPagination.kt`（`placeSpreadTrailer`）・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`・`NoteTitleBlockTest`・`CodeTokensTest`・`CalloutFaceTest`・`EmptyPlaceTextTest`・`EndSpaceTest`・`SpreadPageSizeTest`・`ReadingPlateLookTest`、画面テストは `TypesetRoundingUiTest`・`SpreadPageWidthUiTest`・`CalloutHeaderUiTest`・`EndSpaceUiTest`
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
@@ -72,7 +72,7 @@
 |---|---|---|
 | プレート | 通常表示では、読む画面の場の上に、角の丸い紙が浮いて見える。全画面は画面全体が紙になる | ノートを開いているとき |
 | 紙面の書式 | 見出しの段が H1 から本文へ順に小さくなり、H1・H2 の上に藍の短い線が付く。最初の段落はリード文として少し大きく組まれる。行間が広がる | 全ノート |
-| タグの札（未実装） | frontmatter のタグが本文の末尾に淡い札で並ぶ。紙の上端には何も固定されない | タグがあるノート |
+| タグの札 | frontmatter のタグが本文の末尾に、罫の下の淡い札で並ぶ。紙の上端には何も固定されない | タグがあるノート |
 | コードの枠 | コードが暗い窓に入り、右上に言語の札が付き、主な言語は色分けされる | コードのブロックがあるノート |
 | コールアウトの面 | まとめ・問い・例とヒント・注意が、記号と言葉の付いた色の薄い面になる | コールアウトがあるノート |
 | 番号付きの箇条 | 番号が藍の小さな札に入る | 番号付きの箇条があるノート |
@@ -146,23 +146,20 @@
   **見出しの線は見出しのブロックの高さに含める** — 見開きの計測も同じ高さを足す
 - **リード文かどうかはブロックの位置だけで決まる。** 描画と見開きの計測が同じ純関数を呼び、片方だけがリード文の書式で組む形にしない
 
-### 5.3 題の欄（層2）
+### 5.3 タグの札（層2）
 
-> **紙から外す（2026-11-28、オーナー判断。未実装）。** フォルダの道筋とファイル名は「今どこにいるか」を示す動線なので、
-> 見出しの帯の1行へ移す（→ [rediscover](rediscover.md) §5.1・判断7）。紙の上端に固定した欄は、スクロールしても残って読む場所を狭めていた。
-> **紙に残すのはタグの札だけで、本文の末尾へ移す。** 札の見た目（淡い面・11sp・押せない）は下のまま使う。
-> 末尾の余白（→ 5.8）と見開きの最後のページの計測へ札をどう入れるかは、実装するときにこの節で決める。
-> 下は今の実装の記述で、実装を改めるときに書き換える。
+**紙の上端には何も固定しない。本文は紙の上端から始まる**（2026-11-28、オーナー判断）。フォルダの道筋とファイル名は「今どこにいるか」を示す動線なので、
+見出しの帯の副題の行へ1行で出す（→ [rediscover](rediscover.md) §5.1・判断7）。紙の上端に固定していた題の欄は、スクロールしても残って読む場所を狭めていた。
 
-- **題の上にフォルダの道筋、題の下にタグの札を置き、欄の下に罫を引く。**
-  - 道筋: Vault の中の親フォルダを ` / ` でつないだもの。藍の 11sp・字間を少し空ける。Vault の直下のノートと、相対パスが分からないノート（リンクで開いて走査の結果に無いもの）は出さない。
-    相対パスは、結晶の絞り込みと同じく、ノートを開いて確定した今のノートの相対パス（ノート単位で消える）を読む
-  - タグ: frontmatter の `tags` を、関連ノートのタグと同じ読み方（`frontmatterList`。`domain` に置き、ノートの索引と本文の解析が共有する）で本文の解析と一緒に読み、淡い面の札（11sp）に並べる。本文の中の `#タグ` は拾わない。無ければ札の行を出さない
-    **札は2行まで。** 収まらなければ、2行に収まるだけ並べて末尾に残りの数の札（`+12` など）を置く。題の欄は本文の一覧の外にあるので、タグが多いノートで紙の高さを使い切ると本文へ届かず、見開きでは1ページ目の高さが負になる。どの札まで出すかは描画と見開きの計測が同じ関数で決める。**札の幅は先頭から2行が埋まるまでしか測らない** — タグは何件でも読めるので、隠れる札まで測ると件数に比例して（選び方によっては二乗で）画面の処理を占有する
-  - 罫: 1dp の淡い線。欄と本文の間はブロックの間より 4dp 広い
-- 道筋とタグは**表示だけ**で押せない
-- 見開きでは最初のページの頭に置く。右の並べ読みは今の題の出し方のまま（題の欄を出さない）
-- 道筋とタグは AI へ渡す文・痕跡・知識索引に入れない（今と同じ）
+- **タグの札は本文の末尾に置く。** 最後のブロックの下に、ブロックの間を空けて罫（1dp の淡い線）を引き、罫の下 18dp に札を並べる（`NoteTagRow`）
+  - タグ: frontmatter の `tags` を、関連ノートのタグと同じ読み方（`frontmatterList`。`domain` に置き、ノートの索引と本文の解析が共有する）で本文の解析と一緒に読み、淡い面の札（11sp）に並べる。本文の中の `#タグ` は拾わない。無ければ罫も札も出さない
+  - **札は2行まで。** 収まらなければ、2行に収まるだけ並べて末尾に残りの数の札（`+12` など）を置く。どの札まで出すかは描画と見開きの計測が同じ関数で決める。**札の幅は先頭から2行が埋まるまでしか測らない** — タグは何件でも読めるので、隠れる札まで測ると件数に比例して（選び方によっては二乗で）画面の処理を占有する
+- **通常表示と全画面では、札の行を最後のブロックと同じ一覧の項目の中に置く。一覧の項目を増やさない** — 項目の番号はブロックの番号として節の判定・進捗の報告・末尾の余白が読むので、
+  ブロックでない項目を足すと番号の外を指す。末尾の余白（→ 5.8）は最後の項目の下から測るので、札の行の下に余白が付く。最後のブロックを読み切ったかは札の行まで含めて見る
+- **見開きでは、札の行を最後のページの末尾に置く。切れ端にしない**（`placeSpreadTrailer`）。最後のページにブロックの間と一緒に入ればそのページに、入らなければ切れ端の無いページを1枚足してそこに置く。
+  切れ端はブロックの番号を持ち、読む位置・めくり・進捗がその番号を読むので、札の行を切れ端にすると番号の外を指す。足したページには読む位置が無いので、めくってもそこを読む位置にしない
+- 札は**表示だけ**で押せない。右の並べ読みは札を出さない
+- 札は AI へ渡す文・痕跡・知識索引に入れない（今と同じ）
 
 ### 5.4 型に関係ない部品（層2）
 
@@ -210,7 +207,7 @@
 
 #### インラインのコード
 
-- 等幅・本文の 0.85 倍の大きさ・淡い面（題の欄のタグの札と同じ面。ライト `#F1F3F6`、ダーク `#1B2640`）。字は本文の色
+- 等幅・本文の 0.85 倍の大きさ・淡い面（タグの札と同じ面。ライト `#F1F3F6`、ダーク `#1B2640`）。字は本文の色
 - **文字の背景として描き、角丸と前後の余白は付けない**（→ 判断16）
 
 #### 引用
@@ -357,7 +354,7 @@
   区切り2で型ごとの書式を同じ形の値として持ち、`CompositionLocal` のような暗黙の経路で片方にだけ届く形にしない（→ 判断4）
 - **ノートの題と題の欄の書式も書式の側へ移す。** 今は本文の紙（20sp）と見開き（`TitleStyle`）が別々に持っている
 - **見開きの定数を書式と組で変える。** `SPREAD_BODY_FONT_SP`・`SPREAD_BODY_LINE_SP` は本文の段落の書式と同じ値でなければならない。行の高さを 30sp にするなら定数も 30 にする
-- **部品の高さは見開きの計測に入れる。** コードの枠の頭の行・コールアウトの頭と面の余白・引用の字下げ・表の余白・題の欄は、片ごとに描画と同じ高さを計測が足す
+- **部品の高さは見開きの計測に入れる。** コードの枠の頭の行・コールアウトの頭と面の余白・引用の字下げ・表の余白・タグの札の行は、片ごとに描画と同じ高さを計測が足す
   **余白・間・罫は1つずつ画素へ丸めてから足す。** 描画の `padding`・`size`・`Spacer` はそれぞれ丸めるので、dp を足してから画素にすると、片側が端数になる密度（2.75 など）で札の幅や枠の高さが描画とずれ、境目の行が欠ける。**部品の中だけでなく、ページの余白・列の上限・ブロックの間・箇条の字下げと間・区切り線も同じ**（見開きのページの本文の幅と高さは `spreadTextWidthPx`・`spreadPageContentHeightPx` が持つ）。**ページの幅も親の実際の幅から画素で決める** — 左右のページを並べる親の `Row` は右のページへ残りの幅しか渡さないので、ページを丸めた幅で左右を求めると右だけ1画素縮む。左右共通の幅は `spreadPageWidthPx` が親に収まるように決め、計測と描画の両方へ渡す
 - 色分けの切り分けと型の判定は本文の長さに比例する。解析と同じく Main の外で回す（→ [architecture](../system/architecture.md) 判断3）
 - **`CodeBlock` に欄を足すので、それを読む全箇所を当て直す**（AI へ渡す抜粋・知識索引のリンク・余白メモの照らし直し・見開き・描画）
@@ -524,15 +521,15 @@ Vault のコードはほぼ Python で、ほかは Kotlin とシェルが主な�
   - 型の判定: `cssclasses` が骨格より優先される／骨格の語は頭の記号と番号を外して照らす／2つ以上かつ多いほうに決まる／同数や1つだけでは決まらない／どれにも当たらなければコードの枠で決まる／読めない frontmatter は飛ばす
   - 解析: コードのブロックが言語の札を残す／札の無い枠は札を持たない／AI へ渡す抜粋と知識索引の結果が今と変わらない
   - 色分けの切り分け: 3つの言語それぞれでキーワード・文字列・コメント・数字を切り分ける／閉じていない文字列や複数行の文字列で落ちない／知らない言語と札の無い枠は切り分けない
-  - 題の欄: 道筋は Vault の直下で空になる／タグは今の frontmatter の読み方の結果をそのまま使う
-  - 書式の関係: H1 > … ≥ 本文の大きさの順（題の欄を外すまでは題 > H1 も見る）／アプリの書式に斜体が無い／字間が0／**見開きの定数が本文の段落の書式と一致する**（値ではなく関係を見る）
+  - タグの札: タグは今の frontmatter の読み方の結果をそのまま使う／札の行は最後のページに入ればそこに、入らなければ足した1枚に置く（`SpreadTrailerTest`）。居場所の1行は [rediscover](rediscover.md) §10
+  - 書式の関係: H1 > … ≥ 本文の大きさの順／アプリの書式に斜体が無い／字間が0／**見開きの定数が本文の段落の書式と一致する**（値ではなく関係を見る）
   - 色: §9 の組み合わせがすべて 4.5:1／ダークで場の3色 < 紙 < 紙の上の部品の明るさの順
   - 形: 読む面の角が眺める面より大きい（`BearingChannelTest` は今のまま通る）
   - 案内の文: `「」` で指す名前が、画面にあるボタンの文字として実在する（ソース走査）
   - 末尾の余白: 窓を替えて戻すと、余白が戻った窓で要る分を超えない（`EndSpaceTest`）
   - 場の強さ: 淡い3色が今の3色の色相を保ち、今のグラデーションより明るい／ダークでは設定によらず夜の紺
 - **instrumentation:**
-  - 見開きの計測と描画が一致する（今のテストを新しい書式で通し、コードの枠・コールアウトの面・引用・題の欄が割れる場合を足す）
+  - 見開きの計測と描画が一致する（今のテストを新しい書式で通し、コードの枠・コールアウトの面・引用が割れる場合と札の行を足す）
   - 全画面を出入りした後に末尾へ送ると、最後の段落が見える（`EndSpaceUiTest` に足す。今は戻った直後の見出しの位置までしか見ていない）
 - **実機確認:**
   - ライトとダーク・スマホと開いた Fold（通常表示・机・見開き・全画面・右の並べ読み）で、紙面と部品が組まれて見える
@@ -557,7 +554,6 @@ Vault のコードはほぼ Python で、ほかは Kotlin とシェルが主な�
 ## 11. 既知の制約・未解決事項
 
 - **和文と欧文の間のアキは入らない。** Compose の文字組みには自動で入れる手段が無く、文字列に空白を足すと本文を書き換えたのと同じになる（選択・引用・痕跡の位置がずれる）
-- **題の欄を外すときに決めること:** タグの札を末尾の余白と見開きの最後のページの計測へどう入れるか（→ 5.3）
 - **区切り2で決めること:** 📶 レベルをタイトルの下へ動かすか（表示の順が Obsidian と変わり、見開きの計測も同じ並びで扱う）／
   型が読み取る書き方の約束（「項目：値」の箇条・【件名】・❌ before と ✅ after・`[!quote]`）の範囲／内側の部品の角の段
 - **区切り3で決めること:** 読書ノートの紹介文の帯の色の強さ（部品の色で、読む面の地の色ではない）

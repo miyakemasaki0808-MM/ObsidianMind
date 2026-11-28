@@ -22,11 +22,11 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.ui.markdown.InlineMarkdownColors
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
-import com.example.newproject.ui.markdown.NoteTitleBlock
+import com.example.newproject.ui.markdown.NoteTagRow
 import com.example.newproject.ui.markdown.SpreadMeasureInputs
 import com.example.newproject.ui.markdown.SpreadSliceView
 import com.example.newproject.ui.markdown.measureSpreadBlock
-import com.example.newproject.ui.markdown.noteTitleBlockHeightPx
+import com.example.newproject.ui.markdown.noteTagRowHeightPx
 import com.example.newproject.ui.markdown.tagChipText
 import com.example.newproject.ui.screen.paginateSpread
 import org.junit.Assert.assertEquals
@@ -62,7 +62,7 @@ class TypesetRoundingUiTest {
 
     /** タグが紙の高さを使い切るほど多くても、札は上限の行で止まり、計測と描画が同じ高さになる。 */
     @Test
-    fun 収まらない数のタグでも題の欄は札2行で止まり_計測と描画が合う() {
+    fun 収まらない数のタグでも札の行は2行で止まり_計測と描画が合う() {
         val many = List(60) { "札の文字を長くしたタグ" + it.toString().padStart(2, '0') }
         var measured = 0f
         var oneRow = 0f
@@ -73,10 +73,10 @@ class TypesetRoundingUiTest {
                 val measurer = rememberTextMeasurer()
                 val style = LocalTextStyle.current
                 val widthPx = with(current) { 360.dp.roundToPx() }
-                measured = remember { noteTitleBlockHeightPx(measurer, style, current, widthPx, "題", null, many) }
-                oneRow = remember { noteTitleBlockHeightPx(measurer, style, current, widthPx, "題", null, many.take(1)) }
+                measured = remember { noteTagRowHeightPx(measurer, style, current, widthPx, many) }
+                oneRow = remember { noteTagRowHeightPx(measurer, style, current, widthPx, many.take(1)) }
                 Box(modifier = Modifier.requiredWidth(with(current) { widthPx.toDp() }).onGloballyPositioned { drawn = it.size.height }) {
-                    NoteTitleBlock(title = "題", folder = null, tags = many)
+                    NoteTagRow(tags = many)
                 }
             }
         }
@@ -100,7 +100,7 @@ class TypesetRoundingUiTest {
         assertCodeMatches(shift = 0)
     }
 
-    /** 欄の幅を、描画の札2つと間がちょうど入る幅から [shift] 画素動かし、題の欄の計測の高さと描いた高さを比べる。 */
+    /** 欄の幅を、描画の札2つと間がちょうど入る幅から [shift] 画素動かし、札の行の計測の高さと描いた高さを比べる。 */
     private fun assertTitleBlockMatches(shift: Int) {
         var measured = 0f
         var drawn = -1
@@ -118,9 +118,9 @@ class TypesetRoundingUiTest {
                         chips + MarkdownBodyStyle.TagGap.roundToPx() + shift
                     }
                 }
-                measured = remember { noteTitleBlockHeightPx(measurer, style, current, widthPx, "題", null, tags) }
+                measured = remember { noteTagRowHeightPx(measurer, style, current, widthPx, tags) }
                 Box(modifier = Modifier.requiredWidth(with(current) { widthPx.toDp() }).onGloballyPositioned { drawn = it.size.height }) {
-                    NoteTitleBlock(title = "題", folder = null, tags = tags)
+                    NoteTagRow(tags = tags)
                 }
             }
         }

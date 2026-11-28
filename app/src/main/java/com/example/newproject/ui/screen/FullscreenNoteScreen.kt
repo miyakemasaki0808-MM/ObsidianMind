@@ -3,7 +3,6 @@ package com.example.newproject.ui.screen
 import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
-import com.example.newproject.ui.markdown.noteFolderLabel
 import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.EndSpace
 import com.example.newproject.ui.markdown.rememberEndSpace
@@ -268,7 +267,6 @@ internal fun FullscreenNoteScreen(
                     endSpace = position.endSpace,
                     floating = false,
                     // 今のノートの相対パスは、結晶の絞り込みと同じくノートを開いて確定した値を読む（ノート単位で消える）。
-                    folder = noteFolderLabel(uiState.crystalNotePath),
                     tags = sectionModel?.tags.orEmpty()
                 )
                 IconPill(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,17 +18,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.theme.ChatDivider
-import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceMuted
-import com.example.newproject.ui.theme.ReadingAccent
 import com.example.newproject.ui.theme.ReadingChip
 
 /**
@@ -41,6 +43,37 @@ internal fun noteFolderLabel(vaultRelativePath: String?): String? {
         ?.filter { it.isNotBlank() }
         .orEmpty()
     return folders.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+}
+
+/** 居場所の1行の中身。[folder] はフォルダの道筋（無ければ null）、[file] は拡張子を外したファイル名。 */
+internal data class NoteLocation(val folder: String?, val file: String)
+
+/**
+ * 読む画面の見出しの帯に出す居場所（→ features/rediscover.md §5.1・判断7）。フォルダは [noteFolderLabel] と同じ読み方で、
+ * Vault の直下と相対パスが分からないノートはファイル名だけになる。ファイル名は題から拡張子 `.md` を外したもの。
+ */
+internal fun noteLocationOf(vaultRelativePath: String?, title: String): NoteLocation =
+    NoteLocation(folder = noteFolderLabel(vaultRelativePath), file = title.removeSuffix(".md"))
+
+/**
+ * 居場所の1行。**1行に収め、溢れたらフォルダの側を省いてファイル名を残す** — ファイル名を先に測り、フォルダは残りの幅で末尾を省く。
+ * 文字の倍率を上げても2行にしない。表示だけで押せない。
+ */
+@Composable
+internal fun NoteLocationLine(location: NoteLocation, color: Color, modifier: Modifier = Modifier) {
+    Row(modifier = modifier) {
+        location.folder?.let { folder ->
+            Text(
+                text = "$folder / ",
+                color = color,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+        Text(text = location.file, color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /** 札に出す文字。frontmatter のタグに `#` を付ける。原文が `#` で始まっていれば重ねない。 */
@@ -65,7 +98,7 @@ internal fun chipRowCount(widths: List<Float>, gap: Float, available: Float): In
     return rows
 }
 
-/** 札の行の上限。タグが多くても題の欄が紙の高さを使い切らず、本文と見開きの1ページ目に高さを残す。 */
+/** 札の行の上限。タグが何件あっても、本文の末尾の札の行を2行で止める。 */
 internal const val TAG_MAX_ROWS = 2
 
 /** 出し切れなかったタグの数を示す札の文字。 */
@@ -131,34 +164,25 @@ private fun tagChipWidths(measurer: TextMeasurer, baseStyle: TextStyle, density:
 private class TagChips(val texts: List<String>, val widths: List<Float>, val gap: Float)
 
 /**
- * 題の欄。フォルダの道筋・題・タグの札を積み、下に罫を引く。本文の紙と見開きの1ページ目が同じものを描き、
- * 見開きは [noteTitleBlockHeightPx] で同じ高さを測る。道筋と札は本文ではないので、選択のコピーに入れない。
+ * 本文の末尾のタグの札の行（→ features/note_typesetting.md §5.3）。罫で本文と分け、その下に札を並べる。
+ * 通常表示・全画面は最後のブロックの下に、見開きは最後のページの末尾に同じものを描き、見開きは [noteTagRowHeightPx] で同じ高さを測る。
+ * 札は本文ではないので、選択のコピーに入れない。
  */
 @Composable
-internal fun NoteTitleBlock(title: String, folder: String?, tags: List<String>, modifier: Modifier = Modifier) {
+internal fun NoteTagRow(tags: List<String>, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        if (folder != null) {
-            DisableSelection {
-                Text(text = folder, color = ReadingAccent, style = LocalTextStyle.current.merge(MarkdownBodyStyle.FolderLabel))
-            }
-            Spacer(modifier = Modifier.height(MarkdownBodyStyle.HeaderGap))
-        }
-        Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title))
-        if (tags.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(MarkdownBodyStyle.HeaderGap))
-            DisableSelection {
-                BoxWithConstraints {
-                    val measurer = rememberTextMeasurer()
-                    val density = LocalDensity.current
-                    val baseStyle = LocalTextStyle.current
-                    val widthPx = constraints.maxWidth
-                    val chips = remember(tags, widthPx, density, baseStyle) { tagChipWidths(measurer, baseStyle, density, widthPx, tags) }
-                    TagChipRow(chips.texts)
-                }
+        HorizontalDivider(thickness = MarkdownBodyStyle.TagRowRule, color = ChatDivider)
+        Spacer(modifier = Modifier.height(MarkdownBodyStyle.TagRowGap))
+        DisableSelection {
+            BoxWithConstraints {
+                val measurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                val baseStyle = LocalTextStyle.current
+                val widthPx = constraints.maxWidth
+                val chips = remember(tags, widthPx, density, baseStyle) { tagChipWidths(measurer, baseStyle, density, widthPx, tags) }
+                TagChipRow(chips.texts)
             }
         }
-        Spacer(modifier = Modifier.height(MarkdownBodyStyle.HeaderBottom))
-        HorizontalDivider(thickness = MarkdownBodyStyle.HeaderRule, color = ChatDivider)
     }
 }
 
@@ -187,28 +211,21 @@ private fun TagChipRow(texts: List<String>) {
 }
 
 /**
- * [NoteTitleBlock] の高さ（罫の下の [MarkdownBodyStyle.TitleGap] は含めない）。[baseStyle] は描画が重ねる `LocalTextStyle`、
- * [widthPx] は欄の幅。描画と同じ書式と寸法から測り、**余白・間・罫は描画と同じく1つずつ画素へ丸めてから足す**。
+ * [NoteTagRow] の高さ。[baseStyle] は描画が重ねる `LocalTextStyle`、[widthPx] は欄の幅。タグが無ければ 0（行を出さない）。
+ * 描画と同じ書式と寸法から測り、**余白・間・罫は描画と同じく1つずつ画素へ丸めてから足す**。
  */
-internal fun noteTitleBlockHeightPx(
+internal fun noteTagRowHeightPx(
     measurer: TextMeasurer,
     baseStyle: TextStyle,
     density: Density,
     widthPx: Int,
-    title: String,
-    folder: String?,
     tags: List<String>
 ): Float = with(density) {
+    if (tags.isEmpty()) return@with 0f
     val constraints = Constraints(maxWidth = widthPx.coerceAtLeast(1))
-    fun heightOf(text: String, style: TextStyle): Float =
-        measurer.measure(AnnotatedString(text), baseStyle.merge(style), constraints = constraints, density = density).size.height.toFloat()
-    var height = heightOf(title, MarkdownBodyStyle.Title)
-    if (folder != null) height += heightOf(folder, MarkdownBodyStyle.FolderLabel) + MarkdownBodyStyle.HeaderGap.roundToPx()
-    if (tags.isNotEmpty()) {
-        val chips = tagChipWidths(measurer, baseStyle, density, widthPx, tags)
-        val chipHeight = heightOf("#", MarkdownBodyStyle.Tag) + MarkdownBodyStyle.TagPaddingVertical.roundToPx() * 2
-        val rows = chipRowCount(chips.widths, chips.gap, widthPx.toFloat())
-        height += MarkdownBodyStyle.HeaderGap.roundToPx() + rows * chipHeight + (rows - 1) * chips.gap
-    }
-    height + MarkdownBodyStyle.HeaderBottom.roundToPx() + MarkdownBodyStyle.HeaderRule.roundToPx()
+    val lineHeight = measurer.measure(AnnotatedString("#"), baseStyle.merge(MarkdownBodyStyle.Tag), constraints = constraints, density = density).size.height
+    val chips = tagChipWidths(measurer, baseStyle, density, widthPx, tags)
+    val chipHeight = lineHeight + MarkdownBodyStyle.TagPaddingVertical.roundToPx() * 2
+    val rows = chipRowCount(chips.widths, chips.gap, widthPx.toFloat())
+    MarkdownBodyStyle.TagRowRule.roundToPx() + MarkdownBodyStyle.TagRowGap.roundToPx() + rows * chipHeight + (rows - 1) * chips.gap
 }

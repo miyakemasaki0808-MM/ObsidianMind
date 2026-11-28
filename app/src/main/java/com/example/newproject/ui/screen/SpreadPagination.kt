@@ -661,3 +661,35 @@ internal fun maxBlockChars(blocks: List<MarkdownBlock>): Int = blocks.maxOfOrNul
         else -> 0
     }
 } ?: 0
+
+/** 本文の後に置く行（タグの札）を組んだ結果。[pages] は置いた後のページ、[pageIndex] は行を描くページ。 */
+internal data class SpreadTrailer(val pages: List<SpreadPage>, val pageIndex: Int)
+
+/**
+ * 本文の後に高さ [trailerHeight] の行を置く（→ features/note_typesetting.md §5.3）。**行はブロックではないので、切れ端にしない** —
+ * 切れ端はブロックの番号を持ち、読む位置・めくり・進捗がその番号を読むので、ブロックでないものを指させない。
+ * 最後のページに間 [blockSpacing] と一緒に入ればそのページに、入らなければ切れ端の無いページを1枚足してそこに置く。
+ * 高さが0なら何も置かない（null）。ページの高さの決め方は [paginateSpread] と同じ（1ページ目は [firstPageHeight]、偶数は左、奇数は右）。
+ */
+internal fun placeSpreadTrailer(
+    pages: List<SpreadPage>,
+    trailerHeight: Float,
+    leftPageHeight: Float,
+    rightPageHeight: Float = leftPageHeight,
+    firstPageHeight: Float? = null,
+    blockSpacing: Float
+): SpreadTrailer? {
+    if (trailerHeight <= 0f) return null
+    if (pages.isEmpty()) return SpreadTrailer(listOf(SpreadPage(emptyList())), 0)
+    val last = pages.lastIndex
+    val capacity = when {
+        last == 0 && firstPageHeight != null -> firstPageHeight
+        last % 2 == 0 -> leftPageHeight
+        else -> rightPageHeight
+    }
+    val slices = pages[last].slices
+    val used = slices.sumOf { it.height.toDouble() }.toFloat() + blockSpacing * (slices.size - 1).coerceAtLeast(0)
+    val needed = (if (slices.isEmpty()) 0f else blockSpacing) + trailerHeight
+    return if (used + needed <= capacity) SpreadTrailer(pages, last)
+    else SpreadTrailer(pages + SpreadPage(emptyList()), pages.size)
+}

@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.PanelChip
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurface
@@ -21,7 +22,8 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
-import com.example.newproject.ui.markdown.noteFolderLabel
+import com.example.newproject.ui.markdown.NoteLocationLine
+import com.example.newproject.ui.markdown.noteLocationOf
 import com.example.newproject.ui.markdown.QuoteOffers
 import com.example.newproject.ui.markdown.placeBlockAtTop
 import com.example.newproject.ui.markdown.rememberEndSpace
@@ -427,6 +429,10 @@ internal fun NoteReaderTab(
             title = "Rediscover",
             subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
             else "過去のノートから、思考をひとつ。",
+            // ノートが出ている間は、副題の行を今のノートの居場所に置き換える（→ features/rediscover.md §5.1）。
+            subtitleContent = successState?.let { note ->
+                { NoteLocationLine(noteLocationOf(uiState.crystalNotePath, note.title), color = OnGradientHeaderSubtitle) }
+            },
             // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
             // 本文スクロール・蒸留のつまみ・全画面の右下の丸と縁を取り合わない
             // （→ features/reflect_margin_memo.md 判断7）。ペインを出せる窓では、✎ がペインの開閉を兼ねる。
@@ -563,7 +569,6 @@ internal fun NoteReaderTab(
             quoteOffers = quoteOffers,
             endSpace = bodyPosition.endSpace,
             // 今のノートの相対パスは、結晶の絞り込みと同じくノートを開いて確定した値を読む（ノート単位で消える）。
-            folder = noteFolderLabel(uiState.crystalNotePath),
             tags = sectionModel?.tags.orEmpty()
         )
     }
@@ -996,8 +1001,6 @@ internal fun NoteReaderTab(
                                 if (successState != null && sectionModel != null) {
                                     NoteSpread(
                                         noteKey = successState.targetUri,
-                                        title = successState.title,
-                                        folder = noteFolderLabel(uiState.crystalNotePath),
                                         sectionModel = sectionModel,
                                         position = bodyPosition,
                                         paperColor = notePaperColor(uiState.notePaperTone),

@@ -118,7 +118,10 @@ internal fun MarkdownNoteContent(
     // 見出しを上端に置くための末尾の余白（→ EndSpace）。null なら末尾に余白を足さない。
     endSpace: EndSpace? = null,
     // 本文の列を中央に置く左右の余白（→ MarkdownBodyStyle.columnInset）。一覧は幅いっぱいのまま内側に足す。
-    columnInset: Dp = 0.dp
+    columnInset: Dp = 0.dp,
+    // 本文の末尾に並べるタグの札（→ NoteTagRow）。**最後のブロックと同じ項目の中に置き、一覧の項目を増やさない** —
+    // 項目の番号はブロックの番号として節の判定・進捗の報告・末尾の余白が読むので、ブロックでない項目を足すと番号の外を指す。
+    tags: List<String> = emptyList()
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -166,28 +169,48 @@ internal fun MarkdownNoteContent(
                     verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)
                 ) {
                     items(blocks.size) { i ->
-                        when (val block = blocks[i]) {
-                            is MarkdownBlock.Heading       -> if (headingAccessory == null) {
-                                MarkdownHeading(block)
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(modifier = Modifier.weight(1f)) { MarkdownHeading(block) }
-                                    // 脇の印は本文ではないので、選択のコピーに入れない（→ features/margin_quote.md §11）。
-                                    DisableSelection { headingAccessory(i) }
-                                }
+                        if (i == blocks.lastIndex && tags.isNotEmpty()) {
+                            Column {
+                                MarkdownBlockItem(blocks, i, headingAccessory, imageLoader, imageMeasurements)
+                                Spacer(modifier = Modifier.height(MarkdownBodyStyle.BlockSpacing))
+                                NoteTagRow(tags)
                             }
-                            is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text, lead = isLeadParagraph(i, block))
-                            is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
-                            is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
-                            is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(rememberCodeText(block), block.language)
-                            is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
-                            is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.content)
-                            is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
+                        } else {
+                            MarkdownBlockItem(blocks, i, headingAccessory, imageLoader, imageMeasurements)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** 本文の一覧の1項目。[i] 番目のブロックを描く。 */
+@Composable
+private fun MarkdownBlockItem(
+    blocks: List<MarkdownBlock>,
+    i: Int,
+    headingAccessory: (@Composable (blockIndex: Int) -> Unit)?,
+    imageLoader: NoteImageLoader?,
+    imageMeasurements: NoteImageMeasurements?
+) {
+    when (val block = blocks[i]) {
+        is MarkdownBlock.Heading       -> if (headingAccessory == null) {
+            MarkdownHeading(block)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.weight(1f)) { MarkdownHeading(block) }
+                // 脇の印は本文ではないので、選択のコピーに入れない（→ features/margin_quote.md §11）。
+                DisableSelection { headingAccessory(i) }
+            }
+        }
+        is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text, lead = isLeadParagraph(i, block))
+        is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
+        is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
+        is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(rememberCodeText(block), block.language)
+        is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
+        is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.content)
+        is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
     }
 }
 

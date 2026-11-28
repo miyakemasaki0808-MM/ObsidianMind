@@ -26,7 +26,7 @@ class MarkdownBodyStyleTest {
 
     /** アプリが書く本文の書式すべて。ここに無い書式を足したら、ここへも足す。 */
     private val bodyStyles: List<Pair<String, TextStyle>> = listOf(
-        "Title" to MarkdownBodyStyle.Title,
+        "Tag" to MarkdownBodyStyle.Tag,
         "Paragraph" to MarkdownBodyStyle.Paragraph,
         "Lead" to MarkdownBodyStyle.Lead,
         "Quote" to MarkdownBodyStyle.Quote,
@@ -40,10 +40,10 @@ class MarkdownBodyStyleTest {
     ) + headings.mapIndexed { i, style -> "heading(${i + 1})" to style }
 
     @Test
-    fun `題は見出しより大きく、見出しは段が深いほど大きくならず、本文より小さくならない`() {
-        val sizes = listOf(MarkdownBodyStyle.Title.fontSize.value) + headings.map { it.fontSize.value }
+    fun `見出しは H1 が最大で、段が深いほど大きくならず、本文より小さくならない`() {
+        val sizes = headings.map { it.fontSize.value }
         sizes.zipWithNext().forEach { (upper, lower) -> assertTrue("$upper の次が $lower", upper >= lower) }
-        assertTrue("題は H1 より大きい", MarkdownBodyStyle.Title.fontSize.value > headings.first().fontSize.value)
+        assertTrue("H1 は本文より大きい", headings.first().fontSize.value > MarkdownBodyStyle.Paragraph.fontSize.value)
         headings.forEachIndexed { i, style ->
             assertTrue("H${i + 1} は本文より小さくならない", style.fontSize.value >= MarkdownBodyStyle.Paragraph.fontSize.value)
         }
@@ -61,8 +61,7 @@ class MarkdownBodyStyleTest {
     }
 
     @Test
-    fun `約物の詰めは題と見出しだけに掛ける`() {
-        assertEquals("palt", MarkdownBodyStyle.Title.fontFeatureSettings)
+    fun `約物の詰めは見出しだけに掛ける`() {
         headings.forEach { assertEquals("palt", it.fontFeatureSettings) }
         listOf(MarkdownBodyStyle.Paragraph, MarkdownBodyStyle.Lead, MarkdownBodyStyle.Quote).forEach {
             assertEquals(null, it.fontFeatureSettings)
