@@ -1,6 +1,6 @@
 # Rediscover（ランダム表示）
 
-**状態:** 実装済み・稼働中。**アプリの入口であり心臓**。読む画面の居場所の1行（§5.1・判断7）は実装済み・実機は未確認
+**状態:** 実装済み・稼働中。**アプリの入口であり心臓**。読む画面の居場所の1行（§5.1・判断7）は実装し、実機検証まで終えた（2026-11-29）
 **最終検証:** 2026-11-03 / `6dd72062`（走査の除外・共有・寿命の起点。`EXPLORE-06`・`11`〜`13`・`20`・`21`）。それ以外は 2026-10-06 / `6b39f134`
 **関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.presentDrawnNote()`（冊子と共有）/ `NoteViewModel.collectAllNotesCached()` / `NoteScanCache.kt` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン・見出しの帯）/ `ui/screen/ReaderLayout.kt`（並べ方）/ `ui/component/GradientHeader.kt`（見出しの帯）/ `ui/markdown/NoteTitleBlock.kt`（`noteFolderLabel`・`noteLocationOf`・`NoteLocationLine`）
 **関連テスト:** `NoteRepositoryTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
