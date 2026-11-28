@@ -7,6 +7,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -31,6 +33,7 @@ import org.junit.runner.RunWith
  * 見開きの左右のページの本文は、計測と同じ幅で組まれる（→ docs/dev/features/note_typesetting.md §7・note_spread.md 判断8）。
  * 密度 2.4375・本文領域 800dp・ページ 392dp・溝 16dp では、ページを丸めた 956px を左右に取ると親の幅 1950px を1画素超え、
  * 親の `Row` が右のページだけ 955px に縮める。左右どちらのページの段落も、計測の幅を最大幅として組まれていることを見る。
+ * 箱は多くの端末の窓より広い。左右の見分けは箱のルートの座標から取った中心で行い、窓の幅に依らない。
  */
 @RunWith(AndroidJUnit4::class)
 class SpreadPageWidthUiTest {
@@ -42,10 +45,14 @@ class SpreadPageWidthUiTest {
     fun 端数の密度でも_左右のページの段落は計測と同じ幅で組まれる() {
         val density = Density(2.4375f, 1f)
         val model = buildNoteSectionModel(BODY)
+        // 箱が窓より大きいと Compose は箱を中央へ寄せるので、段落の位置は箱のルートの座標を基準に比べる。
+        // boundsInRoot は窓で切り取られて寄せが消えるので、切り取られない位置と大きさで読む。
+        var boxLeft = 0f
+        var boxWidth = 0
         composeRule.setContent {
             CompositionLocalProvider(LocalDensity provides density) {
                 AppTheme(darkTheme = false) {
-                    Box(modifier = Modifier.requiredSize(width = 800.dp, height = 600.dp)) {
+                    Box(modifier = Modifier.requiredSize(width = 800.dp, height = 600.dp).onGloballyPositioned { boxLeft = it.positionInRoot().x; boxWidth = it.size.width }) {
                         NoteSpread(
                             noteKey = NOTE,
                             title = "見開き",
@@ -71,14 +78,15 @@ class SpreadPageWidthUiTest {
         val expected = spreadTextWidthPx(spreadPageWidthPx(392.dp, 16.dp, container, density), density)
         val nodes = composeRule.onAllNodesWithText("段落", substring = true).fetchSemanticsNodes()
         assertTrue("段落が描かれていない", nodes.isNotEmpty())
-        val center = container / 2f
-        assertTrue("右のページに段落が無い", nodes.any { it.boundsInRoot.left > center })
-        assertTrue("左のページに段落が無い", nodes.any { it.boundsInRoot.right < center })
+        assertEquals("箱の幅", container, boxWidth)
+        val center = boxLeft + boxWidth / 2f
+        assertTrue("右のページに段落が無い", nodes.any { it.positionInRoot.x > center })
+        assertTrue("左のページに段落が無い", nodes.any { it.positionInRoot.x + it.size.width < center })
         nodes.forEach { node ->
             val layouts = mutableListOf<TextLayoutResult>()
             node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
             val maxWidth = layouts.single().layoutInput.constraints.maxWidth
-            assertEquals("${node.boundsInRoot} の段落の組みの幅", expected, maxWidth)
+            assertEquals("${node.positionInRoot} の段落の組みの幅", expected, maxWidth)
         }
     }
 
