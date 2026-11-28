@@ -125,9 +125,8 @@ internal object ReadingTraceBackupJson {
         val array = root.optJSONArray(KEY_TRACES)
             ?: return ReadingTraceBackupReadResult.Unusable("退避ファイルに痕跡が入っていません。")
         if (array.length() > ReadingTraceBackupLimits.MAX_ENTRIES) {
-            return ReadingTraceBackupReadResult.Unusable(
-                "痕跡が多すぎます（${array.length()}件／上限 ${ReadingTraceBackupLimits.MAX_ENTRIES}件）。"
-            )
+            // 理由はそのまま画面に出るので、上限の数を書かない（→ system/ui_copy.md §2 の3）。
+            return ReadingTraceBackupReadResult.Unusable("退避ファイルの痕跡が多すぎて、読み戻せません。")
         }
         val entries = (0 until array.length()).map { index ->
             val item = array.optJSONObject(index)
