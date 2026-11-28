@@ -28,7 +28,7 @@ import com.example.newproject.ui.theme.Panel
 internal fun OptionRow(
     emoji: String,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     onClick: () -> Unit
 ) {
     Surface(
@@ -48,7 +48,7 @@ internal fun OptionRow(
                 Text(title, color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 // 任意のαで薄めない。12sp は AA の大文字例外に入らないので、
                 // 弱い文字は名前付きトークンの範囲から選ぶ。
-                Text(subtitle, color = OnSurfaceFaint, fontSize = 12.sp)
+                subtitle?.let { Text(it, color = OnSurfaceFaint, fontSize = 12.sp) }
             }
         }
     }
