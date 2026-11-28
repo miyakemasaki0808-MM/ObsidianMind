@@ -11,6 +11,7 @@ import com.example.newproject.ui.screen.distillBoldNotice
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /** 蒸留の面の文（→ `docs/dev/system/ui_copy.md` §2・`docs/dev/features/reflect_distill.md`）。 */
 class DistillCopyTest {
@@ -43,5 +44,20 @@ class DistillCopyTest {
     fun `太字が目安を超えても保存できることを言い、超えなければ何も出さない`() {
         assertTrue(distillBoldNotice(isWithinBoldLimit = false, selectedCount = 3)!!.contains("保存できます"))
         assertTrue(distillBoldNotice(isWithinBoldLimit = true, selectedCount = 3) == null)
+    }
+
+    /** 赤は失敗にだけ使う（→ `docs/dev/system/ui_copy.md` §5）。保存できる注意・取り消せない旨・重なりの告知に失敗の色を使わない。 */
+    @Test
+    fun `蒸留の正常な確認と注意に失敗の色を使わない`() {
+        val sheet = File("src/main/java/com/example/newproject/ui/screen/DistillRangeSheet.kt").readText()
+        assertFalse("範囲のシートが失敗の色を使っている", sheet.contains("color = ErrorText") || sheet.contains("else ErrorText"))
+        val tab = File("src/main/java/com/example/newproject/ui/screen/AiTab.kt").readLines()
+        val calm = listOf("DISTILL_CONFIRM_IRREVERSIBLE", "この後は復元できません", "noteUnavailableReason, fontSize", "Text(notice,", "isWithinBoldLimit) OnSurface", "範囲が重なるため")
+        tab.forEachIndexed { i, line ->
+            if (calm.any { line.contains(it) }) {
+                val around = tab.subList(i, minOf(i + 3, tab.size)).joinToString("\n")
+                assertFalse("AiTab.kt:${i + 1} の注意が失敗の色を使っている", around.contains("ErrorText"))
+            }
+        }
     }
 }

@@ -228,7 +228,7 @@ private fun DistillPanel(
             when (state) {
                 is DistillState.Idle -> {
                     if (noteUnavailableReason != null) {
-                        Text(noteUnavailableReason, fontSize = 13.sp, color = ErrorText)
+                        Text(noteUnavailableReason, fontSize = 13.sp, color = OnSurfaceMuted)
                     } else {
                         Button(
                             onClick = onStart,
@@ -275,10 +275,10 @@ private fun DistillPanel(
                     Text(
                         "選択 ${state.selectedCount}箇所・変更後の太字率 %.1f%%".format(ratioPercent),
                         fontSize = 12.sp,
-                        color = if (state.isWithinBoldLimit) OnSurface else ErrorText
+                        color = if (state.isWithinBoldLimit) OnSurface else OnSurfaceMuted
                     )
                     distillBoldNotice(state.isWithinBoldLimit, state.selectedCount)?.let { notice ->
-                        Text(notice, fontSize = 12.sp, lineHeight = 17.sp, color = ErrorText)
+                        Text(notice, fontSize = 12.sp, lineHeight = 17.sp, color = OnSurfaceMuted)
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -373,7 +373,8 @@ private fun DistillPanel(
                     }
                     // 起きることと、取り消せないことを別の行で言う（→ system/ui_copy.md §2 の6）。
                     Text(DISTILL_CONFIRM_WHAT_HAPPENS, fontSize = 12.sp, color = OnSurface)
-                    Text(DISTILL_CONFIRM_IRREVERSIBLE, fontSize = 12.sp, color = ErrorText)
+                    // 取り消せないことは失敗ではないので赤にせず、太字の別の行で言う（→ system/ui_copy.md §2 の6・§5）。
+                    Text(DISTILL_CONFIRM_IRREVERSIBLE, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = OnSurface)
                 }
             },
             confirmButton = {
@@ -412,7 +413,7 @@ private fun DistillPanel(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("保存前の本文を消します。")
-                    Text("この後は復元できません。", color = ErrorText)
+                    Text("この後は復元できません。", fontWeight = FontWeight.Bold, color = OnSurface)
                 }
             },
             confirmButton = {
@@ -470,7 +471,7 @@ private fun DistillCandidateRow(
                     Text(
                         "! 範囲が重なるため選択を外しました",
                         fontSize = 11.sp,
-                        color = ErrorText
+                        color = OnSurfaceMuted
                     )
                 }
             }

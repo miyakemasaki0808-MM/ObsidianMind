@@ -59,7 +59,7 @@ import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.ButtonAi
-import com.example.newproject.ui.theme.ErrorText
+import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnButtonAi
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceSubtle
@@ -190,14 +190,15 @@ internal fun DistillRangeSheetContent(
         Text(
             "変更後の太字率 %.1f%%".format(projectedBoldRatio * 100.0),
             fontSize = 12.sp,
-            color = if (boldNotice == null) OnSurfaceSubtle else ErrorText
+            color = if (boldNotice == null) OnSurfaceSubtle else OnSurfaceMuted
         )
         boldNotice?.let { notice ->
             Text(
                 text = notice,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
-                color = ErrorText,
+                // 保存できる注意なので失敗の色にしない（→ system/ui_copy.md §5）。「!」が色に頼らない印になる。
+                color = OnSurfaceMuted,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
             )
         }
@@ -214,7 +215,7 @@ internal fun DistillRangeSheetContent(
                 text = notice,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
-                color = ErrorText,
+                color = OnSurfaceMuted,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
             )
         }
