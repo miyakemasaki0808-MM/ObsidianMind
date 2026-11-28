@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import com.example.newproject.ui.theme.ReadingAccent
 import com.example.newproject.model.NotePaperTone
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.draw.drawBehind
 import com.example.newproject.ui.theme.ReadingPlateLight
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
@@ -218,6 +219,16 @@ private val PLATE_LIGHT_DEPTH = 240.dp
 /** プレートを場から浮かせる影。ダークでは影が見えないので、縁（`ReadingPlateRim`）で浮かせる。 */
 private val PLATE_ELEVATION = 4.dp
 
+/** 本文の紙の見た目の要素。[readingPlateLook] が浮かせるかどうかから決める。 */
+internal data class ReadingPlateLook(val rounded: Boolean, val shadow: Boolean, val rim: Boolean, val topLight: Boolean)
+
+/**
+ * 本文の紙の見た目（→ features/note_typesetting.md §5.1）。浮かせる紙（通常表示）は角・影・縁・上端の光を持つ。
+ * **浮かせない紙（全画面）は画面そのものなので、どれも持たない** — 角や光を残すと、安全領域の下から別の面が始まって見える。
+ */
+internal fun readingPlateLook(floating: Boolean): ReadingPlateLook =
+    ReadingPlateLook(rounded = floating, shadow = floating, rim = floating, topLight = floating)
+
 /** ノート本文パネル（通常表示・全画面で共用）。 */
 @Composable
 internal fun NoteContentPanel(
@@ -248,21 +259,26 @@ internal fun NoteContentPanel(
     /** 題の欄のタグ。本文の解析結果から渡す。 */
     tags: List<String> = emptyList()
 ) {
+    val look = readingPlateLook(floating)
     Surface(
         modifier = modifier.fillMaxWidth(),
         // 紙の地色は放置期間で決まる。演出が無効なら現行の `Panel` と同値が返る。
         color = notePaperColor(uiState.notePaperTone),
         // **形は「読む面」の役割から引く。** 値を直に書くと、冊子との区別が
         // 「揃えたほうが綺麗」の一言で消える（→ system/bearing_channels.md §6）。
-        shape = ReadingSurfaceShape,
-        shadowElevation = if (floating) PLATE_ELEVATION else 0.dp,
-        border = if (floating) BorderStroke(1.dp, ReadingPlateRim) else null
+        shape = if (look.rounded) ReadingSurfaceShape else RectangleShape,
+        shadowElevation = if (look.shadow) PLATE_ELEVATION else 0.dp,
+        border = if (look.rim) BorderStroke(1.dp, ReadingPlateRim) else null
     ) {
         // 紙の上端からごく淡い光を重ねる（ダークだけ。ライトは透明で何も描かない）。光はどのノートでも同じで何も表さない。
         val plateLight = ReadingPlateLight
         BoxWithConstraints(
-            modifier = Modifier.drawBehind {
-                drawRect(Brush.verticalGradient(listOf(plateLight, Color.Transparent), endY = PLATE_LIGHT_DEPTH.toPx()))
+            modifier = if (look.topLight) {
+                Modifier.drawBehind {
+                    drawRect(Brush.verticalGradient(listOf(plateLight, Color.Transparent), endY = PLATE_LIGHT_DEPTH.toPx()))
+                }
+            } else {
+                Modifier
             }
         ) {
             // 本文の列を最大幅で中央に置く。題も同じ余白で本文の頭にそろえる。
