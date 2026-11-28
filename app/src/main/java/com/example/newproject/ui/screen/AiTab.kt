@@ -319,7 +319,7 @@ private fun DistillPanel(
                     }
                     if (state.canKeepCurrent) {
                         TextButton(onClick = { showKeepConfirmation = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (state.canRestore) "現在のファイルを維持" else "復旧情報を破棄")
+                            Text(if (state.canRestore) "現在のファイルを維持" else "保存前の本文を消す")
                         }
                     }
                 }

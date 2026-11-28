@@ -139,7 +139,7 @@ internal class DistillWriteRepository(
         if (request.targetUri.isBlank()) {
             return DistillWriteResult.Failure(
                 DistillWriteFailureStage.VALIDATION,
-                "対象URIが空です。",
+                "ノートを開けません。",
                 recoveryRequired = false
             )
         }
@@ -234,7 +234,7 @@ internal class DistillWriteRepository(
                 if (!recoveryStore.delete()) {
                     return DistillWriteResult.Failure(
                         DistillWriteFailureStage.CLEANUP,
-                        "競合を検知しましたが、準備済み復旧レコードを削除できませんでした。",
+                        "ノートが外で書き換えられましたが、保存前の本文を消せませんでした。",
                         recoveryRequired = true
                     )
                 }
@@ -268,7 +268,7 @@ internal class DistillWriteRepository(
             if (!recoveryStore.delete()) {
                 return DistillWriteResult.Failure(
                     DistillWriteFailureStage.CLEANUP,
-                    "書き込みは完了しましたが、復旧レコードを削除できませんでした。",
+                    "保存はできましたが、保存前の本文を消せませんでした。",
                     recoveryRequired = true,
                     documentMayHaveChanged = true
                 )
@@ -345,7 +345,7 @@ internal class DistillWriteRepository(
                     DistillRecoveryResolutionResult.Failure("復元後のノートを検証できませんでした。", touchedTargetUri = record.targetUri)
                 } else if (!recoveryStore.delete()) {
                     DistillRecoveryResolutionResult.Failure(
-                        "復元は完了しましたが、復旧レコードを削除できませんでした。",
+                        "復元はできましたが、保存前の本文を消せませんでした。",
                         touchedTargetUri = record.targetUri
                     )
                 } else {

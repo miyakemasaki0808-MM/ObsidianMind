@@ -118,7 +118,7 @@ fun ReadingTraceCleanupScreen(
             // 「存在しない」と断定しない。**現在の走査で見つからない**が事実の限界で、
             // 同期途中なら後から現れうる（→ lessons L24）。
             body = "「${candidate.noteTitle}」の読書記録を削除します。\n" +
-                "現在の走査ではこのノートが見つかりません。ノート本文は削除されません。",
+                "いまの Vault では、このノートが見つかりません。ノート本文は削除されません。",
             onConfirm = {
                 onDelete(candidate.key)
                 pendingDelete = null

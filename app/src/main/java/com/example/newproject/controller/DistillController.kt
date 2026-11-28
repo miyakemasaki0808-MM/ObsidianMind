@@ -687,7 +687,7 @@ internal class DistillController(
 
     private fun resolvedButUndeletableState() = DistillState.RecoveryRequired(
         DistillRecoveryKind.Corrupt,
-        "書き込み内容は安全ですが、古い復旧情報を削除できませんでした。",
+        "保存はできましたが、保存前の本文を消せませんでした。",
         canRestore = false,
         canExport = false,
         canKeepCurrent = true
@@ -745,7 +745,7 @@ internal class DistillController(
             val deleted = withContext(ioDispatcher) { persistence.discardPendingRecovery() }
             update(
                 if (deleted) DistillState.RecoveryResolved("現在のファイルを維持しました。")
-                else DistillState.Error("復旧情報を削除できませんでした。", canRetry = false)
+                else DistillState.Error("保存前の本文を消せませんでした。", canRetry = false)
             )
         }
     }

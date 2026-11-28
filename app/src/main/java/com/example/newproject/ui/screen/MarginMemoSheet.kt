@@ -86,7 +86,6 @@ import com.example.newproject.domain.ArrangedMemos
 import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.domain.MemoSendAction
-import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
 import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
@@ -516,7 +515,7 @@ internal fun MarginMemoSheetContent(
             // **合図であって壁ではない。** 超えても切らないし、置けなくもならない。
             if (isMemoOverSoftLimit(draft.text)) {
                 Text(
-                    text = "少し長めです（${SOFT_MEMO_CHARS}字をめやすに）。このまま置けます。",
+                    text = "少し長めです。このまま置けます。",
                     color = OnSurfaceMuted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 4.dp)

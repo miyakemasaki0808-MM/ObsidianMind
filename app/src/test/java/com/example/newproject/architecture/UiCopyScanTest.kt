@@ -43,4 +43,22 @@ class UiCopyScanTest {
         val found = literalsContaining(listOf("ください"))
         assertTrue("指示の口調が残っている: $found", found.isEmpty())
     }
+
+    /**
+     * 画面の状態を作る層（ui・controller と、結果の文を画面へ渡す蒸留の書き込み）に、内部の言葉を書かない。
+     * データの層の例外の文は記録と判定のためのもので、画面へは出さない（→ FailureText）ので見ない。
+     */
+    @Test
+    fun `画面へ渡す文に内部の言葉を書かない`() {
+        val root = File("src/main/java/com/example/newproject")
+        val files = listOf("ui", "controller").flatMap { dir -> File(root, dir).walkTopDown().filter { it.isFile && it.extension == "kt" }.toList() } +
+            File(root, "data/DistillWriteRepository.kt")
+        val words = listOf("復旧情報", "復旧レコード", "URI", "現在の走査", "めやすに")
+        val found = files.flatMap { file ->
+            file.readLines().flatMapIndexed { i, line ->
+                literal.findAll(line).map { it.value }.filter { text -> words.any { text.contains(it) } }.map { "${file.name}:${i + 1} $it" }.toList()
+            }
+        }
+        assertTrue("内部の言葉が残っている: $found", found.isEmpty())
+    }
 }
