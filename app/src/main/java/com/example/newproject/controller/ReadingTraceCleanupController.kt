@@ -124,7 +124,7 @@ internal class ReadingTraceCleanupController(
         val listing = withContext(ioDispatcher) { persistence.listKeys(vaultKey) }
         when (listing) {
             is ReadingTraceKeyListing.Unavailable ->
-                ReadingTraceCleanupState.Error(listing.reason)
+                ReadingTraceCleanupState.Error(FailureScene.TraceListing.text)
             is ReadingTraceKeyListing.Available -> {
                 val scan = handle.collectAllNotes()
                 // 現存ノートのパスをキー化して突き合わせる。**ここまでファイルは1つも開かない。**

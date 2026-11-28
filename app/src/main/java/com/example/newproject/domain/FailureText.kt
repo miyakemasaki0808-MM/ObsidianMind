@@ -51,7 +51,13 @@ internal enum class FailureScene(val text: String, val busyText: String = AI_BUS
     TraceImport("読書痕跡を読み戻せませんでした。"),
 
     /** 痕跡の整理の候補を調べる。 */
-    TraceCleanup("痕跡の整理を始められませんでした。")
+    TraceCleanup("痕跡の整理を始められませんでした。"),
+
+    /**
+     * 読書痕跡の置き場の一覧を読む（退避と整理）。データの層は読めなかった理由を結果に入れて返すが、例外の文が入りうるので
+     * **結果の理由は画面に出さず、この文に置き換える。** 読めなかったことを「痕跡ゼロ」へ畳まない。
+     */
+    TraceListing("読書痕跡の置き場を読み取れませんでした。")
 }
 
 internal const val AI_BUSY_TEXT = "端末のAIが混み合っています。少し待つと使えます。"

@@ -208,7 +208,7 @@ internal class ReadingTraceBackupController(
             // **列挙できなかったを「痕跡ゼロ」へ畳まない。** 畳むと空の退避ファイルを
             // 書き出し、それを信じて端末を移した時点で全部失われる。
             is ReadingTraceKeyListing.Unavailable ->
-                ReadingTraceBackupState.Error(listing.reason)
+                ReadingTraceBackupState.Error(FailureScene.TraceListing.text)
 
             is ReadingTraceKeyListing.Available -> {
                 val keys = listing.keys.sorted()

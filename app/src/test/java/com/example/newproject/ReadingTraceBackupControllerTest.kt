@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
 import com.example.newproject.controller.ReadingTraceBackupController
 import com.example.newproject.data.ReadingTraceBackupJson
 import com.example.newproject.data.ReadingTraceFolderStatus
@@ -76,7 +77,22 @@ class ReadingTraceBackupControllerTest {
         env.controller.export { bytes -> env.written = bytes }
         advanceUntilIdle()
 
-        assertTrue(env.state.value is ReadingTraceBackupState.Error)
+        assertEquals(ReadingTraceBackupState.Error(FailureScene.TraceListing.text), env.state.value)
+        assertNull("空の退避ファイルを書いてしまった", env.written)
+    }
+
+    /** 一覧を読むときに例外が出ても、例外の文を画面へ出さず、空の退避ファイルを書かない。 */
+    @Test
+    fun `一覧を読むときの例外の文を画面へ出さない`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/habit.md"))
+        env.persistence.listingThrows = true
+
+        env.controller.export { bytes -> env.written = bytes }
+        advanceUntilIdle()
+
+        val error = env.state.value as ReadingTraceBackupState.Error
+        assertTrue(error.message, !error.message.contains("EACCES"))
         assertNull("空の退避ファイルを書いてしまった", env.written)
     }
 
@@ -881,6 +897,7 @@ private class FakeBackupPersistence : ReadingTracePersistence {
     val unreadableKeys = mutableSetOf<String>()
     val unwritablePaths = mutableSetOf<String>()
     var listingUnavailable = false
+    var listingThrows = false
     @Volatile
     var saveCount = 0
         private set
@@ -914,7 +931,9 @@ private class FakeBackupPersistence : ReadingTracePersistence {
     }
 
     override fun listKeys(vaultKey: String): ReadingTraceKeyListing = when {
-        listingUnavailable -> ReadingTraceKeyListing.Unavailable("読み取れませんでした")
+        // データの層は例外の文を理由に入れて返しうる。画面へは出さない。
+        listingUnavailable -> ReadingTraceKeyListing.Unavailable("EACCES raw-provider-error")
+        listingThrows -> throw java.io.IOException("EACCES raw-provider-error")
         vaultKey != VAULT -> ReadingTraceKeyListing.Unavailable("Vault が違います")
         else -> ReadingTraceKeyListing.Available(traces.keys.toSet())
     }
