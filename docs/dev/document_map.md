@@ -133,6 +133,7 @@
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
 | [tab_navigation.md](system/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |
 | [ui_design_principles.md](system/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** |
+| [ui_copy.md](system/ui_copy.md) | **UI の文言の書き方**（状態を言い直さない・内部の数字を出さない・語の組・ブランドの語）。**画面の文を足す・直す前に読む** |
 | [fold_experience.md](system/fold_experience.md) | **Fold の机**（面を役割で呼ぶ・今のノートは主の面の1つ・4つの契約・姿勢の割り当て）。Fold だけの体験を足す前に読む |
 | [bearing_channels.md](system/bearing_channels.md) | **佇まいのチャネル割り当て**（色＝年代／形＝面の役割／位置＝分類…）。装飾を足す前に読む |
 | [theme_and_ui_refactor.md](system/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 |
@@ -261,6 +262,7 @@
 | `model/NoteUiState.kt` / `model/state/` | [architecture](system/architecture.md) / [tab_navigation](system/tab_navigation.md) |
 | `model/` の共有データ型 | [architecture](system/architecture.md) → 該当機能の設計書 |
 | `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](system/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](system/theme_and_ui_refactor.md) → [dark_mode](features/dark_mode.md) |
+| **画面に出す文を足す・直す**（見出し・副題・ボタン・注記・確認・失敗の文） | **[ui_copy](system/ui_copy.md)** → Vigilith が話す文は [character_vigilith](features/character_vigilith.md) §5 |
 | **情報を色・形・動きで伝える変更**（装飾を足す・分類を見せる・演出を足す） | **[bearing_channels](system/bearing_channels.md)（どのチャネルが何を意味するか）** → [ui_design_principles](system/ui_design_principles.md) |
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md)・[note_typesetting](features/note_typesetting.md) §5.4（ダークの夜の紺） |
 | `ui/markdown/MarkdownBodyStyle.kt`・本文の書式・読む面のプレート・ノートの型 | **[note_typesetting](features/note_typesetting.md)（書式は1か所・型は本文から表示の前に）** → [note_spread](features/note_spread.md) 判断8（描画と計測が同じ書式を読む） |
